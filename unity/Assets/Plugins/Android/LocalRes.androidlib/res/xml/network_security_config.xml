@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Config for Shadowing 3x Tutor
+
+    Production builds use HTTPS only.
+    Development/LAN builds allow HTTP to local IPs for testing.
+
+    WARNING: For production release, consider removing cleartextTrafficPermitted
+    or restricting to specific domains only.
+-->
+<network-security-config>
+    <!-- Base config: HTTPS by default for all domains -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Allow HTTP for localhost (emulator) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+
+    <!-- Allow HTTP for LAN IPs (192.168.x.x) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="false">192.168.1.1</domain>
+    </domain-config>
+
+    <!--
+        For LAN testing, the app uses AppConfig.LanIP which is user-configurable.
+        Since we can't specify IP ranges in network_security_config, we use
+        android:usesCleartextTraffic="true" in AndroidManifest for development.
+
+        For production release:
+        1. Remove android:usesCleartextTraffic="true" from AndroidManifest
+        2. This config ensures only HTTPS is used for external connections
+    -->
+</network-security-config>

@@ -1,0 +1,103 @@
+# Unity YAML files - treat as text with LF line endings
+*.unity text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.asset text merge=unityyamlmerge eol=lf
+*.meta text eol=lf
+*.mat text eol=lf
+*.anim text eol=lf
+*.controller text eol=lf
+*.overrideController text eol=lf
+*.physicMaterial text eol=lf
+*.physicsMaterial2D text eol=lf
+*.playable text eol=lf
+*.mask text eol=lf
+*.brush text eol=lf
+*.flare text eol=lf
+*.fontsettings text eol=lf
+*.guiskin text eol=lf
+*.giparams text eol=lf
+*.renderTexture text eol=lf
+*.spriteatlas text eol=lf
+*.terrainlayer text eol=lf
+*.mixer text eol=lf
+*.signal text eol=lf
+
+# Unity binary files - do not merge
+*.cubemap binary
+*.unitypackage binary
+
+# 3D models - binary
+*.fbx binary
+*.FBX binary
+*.obj binary
+*.blend binary
+*.blend1 binary
+*.dae binary
+*.3ds binary
+*.max binary
+*.mb binary
+*.ma binary
+
+# Textures - binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.psd binary
+*.tiff binary
+*.tif binary
+*.tga binary
+*.bmp binary
+*.exr binary
+*.hdr binary
+
+# Audio - binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.aiff binary
+*.aif binary
+
+# Video - binary
+*.mp4 binary
+*.mov binary
+*.avi binary
+*.webm binary
+
+# Fonts - binary
+*.ttf binary
+*.otf binary
+
+# Archives - binary
+*.zip binary
+*.7z binary
+*.gz binary
+*.tar binary
+
+# Scripts - text with LF
+*.cs text eol=lf diff=csharp
+*.shader text eol=lf
+*.cginc text eol=lf
+*.hlsl text eol=lf
+*.compute text eol=lf
+
+# Config files - text
+*.json text eol=lf
+*.xml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+
+# Backend
+*.js text eol=lf
+*.ts text eol=lf
+
+# Keep LF for shell scripts
+*.sh text eol=lf
+
+# Windows batch files use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf

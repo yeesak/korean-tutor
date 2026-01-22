@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ATS (App Transport Security) Settings for iOS
+
+  This file configures exceptions to allow local network connections during development.
+
+  IMPORTANT: For production releases:
+  - Use HTTPS for all backend connections
+  - Remove or minimize ATS exceptions
+  - Apple may reject apps with broad ATS exceptions
+
+  To use this file:
+  1. Copy to your Xcode project's root
+  2. Or add entries to the generated Info.plist after building
+
+  For Unity, you can add a PostProcessBuild script to inject these settings.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- Allow local network connections (required for LAN testing) -->
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+
+        <!--
+          Exception domains for development/staging
+          Remove or comment out for App Store release
+        -->
+        <key>NSExceptionDomains</key>
+        <dict>
+            <!-- Local development IPs (customize as needed) -->
+            <key>192.168.1.100</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSIncludesSubdomains</key>
+                <false/>
+            </dict>
+
+            <!-- localhost alternative (for simulators) -->
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+
+            <!--
+              Staging server example (if not using HTTPS yet)
+              <key>staging-api.example.com</key>
+              <dict>
+                  <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                  <true/>
+              </dict>
+            -->
+        </dict>
+    </dict>
+</dict>
+</plist>

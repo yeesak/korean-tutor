@@ -1,0 +1,72 @@
+# Docker Compose for Shadowing 3x Tutor Backend
+#
+# Usage:
+#   Development:  docker-compose up
+#   Production:   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   With rebuild: docker-compose up --build
+#   Stop:         docker-compose down
+#   Logs:         docker-compose logs -f
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shadowing-tutor-backend
+    restart: unless-stopped
+
+    # Port mapping (HOST:CONTAINER)
+    ports:
+      - "${PORT:-3000}:3000"
+
+    # Environment variables
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3000
+      - HOST=0.0.0.0
+      # API Keys (set these in .env or environment)
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+      - XAI_MODEL=${XAI_MODEL:-grok-3}
+
+    # Environment file (optional, for local development)
+    env_file:
+      - .env
+
+    # Persist cache between restarts
+    volumes:
+      - cache-data:/app/cache
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits (adjust based on your server)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for persistent storage
+volumes:
+  cache-data:
+    driver: local

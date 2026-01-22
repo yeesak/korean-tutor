@@ -1,0 +1,31 @@
+# Render.com deployment configuration
+# Deploy: https://render.com/docs/deploy-from-repo
+#
+# Steps:
+# 1. Push this repo to GitHub
+# 2. Create new Web Service on Render
+# 3. Connect your GitHub repo
+# 4. Render will auto-detect this file
+# 5. Set environment variables in Render dashboard:
+#    - ELEVENLABS_API_KEY
+#    - XAI_API_KEY
+#    - NODE_ENV=production
+
+services:
+  - type: web
+    name: shadowing-tutor-backend
+    runtime: node
+    region: oregon  # or singapore for Asia
+    plan: free      # or starter for better performance
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: ELEVENLABS_API_KEY
+        sync: false  # Set manually in dashboard
+      - key: XAI_API_KEY
+        sync: false  # Set manually in dashboard

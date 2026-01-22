@@ -1,0 +1,210 @@
+{
+  "version": 1,
+  "topics": [
+    {
+      "id": "S01",
+      "season": 1,
+      "topic": "카페에서 주문하기",
+      "topicEn": "Ordering at a Cafe",
+      "expressions": [
+        {"korean": "커피 주세요.", "english": "Coffee please."},
+        {"korean": "케이크 주세요.", "english": "Cake please."},
+        {"korean": "커피랑 우유", "english": "Coffee and milk"},
+        {"korean": "커피 한 잔 주세요.", "english": "One cup of coffee please."},
+        {"korean": "아메리카노 주세요.", "english": "Americano please."},
+        {"korean": "아이스 아메리카노 주세요.", "english": "Iced americano please."},
+        {"korean": "두유로 변경해 주세요.", "english": "Please change to soy milk."},
+        {"korean": "샷 추가해 주세요.", "english": "Please add an extra shot."}
+      ]
+    },
+    {
+      "id": "S02",
+      "season": 2,
+      "topic": "자기소개",
+      "topicEn": "Self Introduction",
+      "expressions": [
+        {"korean": "안녕하세요.", "english": "Hello."},
+        {"korean": "만나서 반가워요.", "english": "Nice to meet you."},
+        {"korean": "어디에서 왔어요?", "english": "Where are you from?"},
+        {"korean": "잘 지냈어요?", "english": "How have you been?"},
+        {"korean": "저는 민영이에요.", "english": "I'm Minyoung."},
+        {"korean": "저는 21살이에요.", "english": "I'm 21 years old."},
+        {"korean": "직업이 뭐예요?", "english": "What's your job?"},
+        {"korean": "저는 학생이에요.", "english": "I'm a student."}
+      ]
+    },
+    {
+      "id": "S03",
+      "season": 3,
+      "topic": "관광하기",
+      "topicEn": "Sightseeing",
+      "expressions": [
+        {"korean": "이게 뭐예요?", "english": "What is this?"},
+        {"korean": "사진 찍어도 돼요?", "english": "May I take a photo?"},
+        {"korean": "구경해도 돼요?", "english": "May I look around?"},
+        {"korean": "재밌어요.", "english": "It's fun."},
+        {"korean": "여기 너무 예뻐요.", "english": "It's so pretty here."},
+        {"korean": "여기 추천해요.", "english": "I recommend here."},
+        {"korean": "어디로 가야 돼요?", "english": "Where should I go?"}
+      ]
+    },
+    {
+      "id": "S04",
+      "season": 4,
+      "topic": "택시 타기",
+      "topicEn": "Taking a Taxi",
+      "expressions": [
+        {"korean": "명동으로 가 주세요.", "english": "Please go to Myeongdong."},
+        {"korean": "여기에서 내려 주세요.", "english": "Please drop me off here."},
+        {"korean": "빨리 가 주세요.", "english": "Please go fast."},
+        {"korean": "서울역으로 갈 수 있어요?", "english": "Can you go to Seoul Station?"},
+        {"korean": "얼마나 걸려요?", "english": "How long does it take?"},
+        {"korean": "여기에서 세워주세요.", "english": "Please stop here."},
+        {"korean": "카드 돼요?", "english": "Do you take card?"},
+        {"korean": "거스름돈 주세요.", "english": "Please give me the change."}
+      ]
+    },
+    {
+      "id": "S05",
+      "season": 5,
+      "topic": "길 찾기",
+      "topicEn": "Finding Directions",
+      "expressions": [
+        {"korean": "화장실 어디 있어요?", "english": "Where is the restroom?"},
+        {"korean": "지하철역 어떻게 가요?", "english": "How do I get to the subway station?"},
+        {"korean": "여기에서 가까워요?", "english": "Is it close from here?"},
+        {"korean": "오른쪽으로 가세요.", "english": "Go right."},
+        {"korean": "왼쪽으로 가세요.", "english": "Go left."},
+        {"korean": "직진하세요.", "english": "Go straight."},
+        {"korean": "돌아가세요.", "english": "Go back."},
+        {"korean": "여기 맞아요?", "english": "Is this the right place?"},
+        {"korean": "도와주세요.", "english": "Please help me."}
+      ]
+    },
+    {
+      "id": "S06",
+      "season": 6,
+      "topic": "식당에서 주문하기",
+      "topicEn": "Ordering at a Restaurant",
+      "expressions": [
+        {"korean": "메뉴판 주세요.", "english": "Menu please."},
+        {"korean": "이거 주세요.", "english": "This one please."},
+        {"korean": "물 주세요.", "english": "Water please."},
+        {"korean": "덜 맵게 해 주세요.", "english": "Less spicy please."},
+        {"korean": "포장해 주세요.", "english": "To go please."},
+        {"korean": "계산해 주세요.", "english": "Check please."},
+        {"korean": "맛있어요.", "english": "It's delicious."},
+        {"korean": "추천해 주세요.", "english": "Please recommend something."},
+        {"korean": "몇 분 걸려요?", "english": "How many minutes does it take?"}
+      ]
+    },
+    {
+      "id": "S07",
+      "season": 7,
+      "topic": "일상생활",
+      "topicEn": "Daily Life",
+      "expressions": [
+        {"korean": "오늘 뭐 해요?", "english": "What are you doing today?"},
+        {"korean": "지금 어디예요?", "english": "Where are you now?"},
+        {"korean": "같이 갈래요?", "english": "Do you want to go together?"},
+        {"korean": "저는 집에 있어요.", "english": "I'm at home."},
+        {"korean": "내일 봐요.", "english": "See you tomorrow."},
+        {"korean": "전화할게요.", "english": "I'll call you."},
+        {"korean": "바빠요?", "english": "Are you busy?"},
+        {"korean": "쉬고 있어요.", "english": "I'm resting."}
+      ]
+    },
+    {
+      "id": "S08",
+      "season": 8,
+      "topic": "학교생활",
+      "topicEn": "School Life",
+      "expressions": [
+        {"korean": "숙제 있어요.", "english": "I have homework."},
+        {"korean": "시험 있어요.", "english": "I have an exam."},
+        {"korean": "수업 언제 시작해요?", "english": "When does class start?"},
+        {"korean": "쉬는 시간이에요.", "english": "It's break time."},
+        {"korean": "공부해요.", "english": "I'm studying."},
+        {"korean": "선생님, 질문 있어요.", "english": "Teacher, I have a question."},
+        {"korean": "다시 말해 주세요.", "english": "Please say it again."}
+      ]
+    },
+    {
+      "id": "S09",
+      "season": 9,
+      "topic": "체육 및 건강",
+      "topicEn": "Sports and Health",
+      "expressions": [
+        {"korean": "운동하러 가요.", "english": "I'm going to exercise."},
+        {"korean": "조깅해요.", "english": "I'm jogging."},
+        {"korean": "스트레칭해요.", "english": "I'm stretching."},
+        {"korean": "아파요.", "english": "It hurts."},
+        {"korean": "병원 가야 돼요.", "english": "I need to go to the hospital."},
+        {"korean": "약 주세요.", "english": "Medicine please."},
+        {"korean": "어디가 아파요?", "english": "Where does it hurt?"}
+      ]
+    },
+    {
+      "id": "S10",
+      "season": 10,
+      "topic": "여행 준비",
+      "topicEn": "Travel Preparation",
+      "expressions": [
+        {"korean": "여권 있어요.", "english": "I have my passport."},
+        {"korean": "비행기 표 있어요.", "english": "I have my plane ticket."},
+        {"korean": "짐 쌌어요.", "english": "I packed my bags."},
+        {"korean": "호텔 예약했어요.", "english": "I booked a hotel."},
+        {"korean": "몇 시 출발해요?", "english": "What time do we leave?"},
+        {"korean": "여기서 기다려요.", "english": "Wait here."},
+        {"korean": "공항 어디예요?", "english": "Where is the airport?"},
+        {"korean": "환전했어요.", "english": "I exchanged money."}
+      ]
+    },
+    {
+      "id": "S11",
+      "season": 11,
+      "topic": "쇼핑하기",
+      "topicEn": "Shopping",
+      "expressions": [
+        {"korean": "이거 얼마예요?", "english": "How much is this?"},
+        {"korean": "이거 주세요.", "english": "This one please."},
+        {"korean": "좀 깎아 주세요.", "english": "Please give me a discount."},
+        {"korean": "다른 색 있어요?", "english": "Do you have other colors?"},
+        {"korean": "입어봐도 돼요?", "english": "May I try it on?"},
+        {"korean": "카드 돼요?", "english": "Do you take card?"},
+        {"korean": "영수증 주세요.", "english": "Receipt please."}
+      ]
+    },
+    {
+      "id": "S12",
+      "season": 12,
+      "topic": "문화 체험",
+      "topicEn": "Cultural Experience",
+      "expressions": [
+        {"korean": "한복 입어봤어요.", "english": "I tried wearing hanbok."},
+        {"korean": "한국 전통 음악 좋아요.", "english": "I like Korean traditional music."},
+        {"korean": "김치 만들었어요.", "english": "I made kimchi."},
+        {"korean": "태권도 배워요.", "english": "I'm learning taekwondo."},
+        {"korean": "사물놀이 봤어요.", "english": "I watched samulnori."},
+        {"korean": "절에 갔어요.", "english": "I went to a temple."},
+        {"korean": "한옥이 예뻐요.", "english": "Hanok is beautiful."}
+      ]
+    },
+    {
+      "id": "S13",
+      "season": 13,
+      "topic": "명절과 행사",
+      "topicEn": "Holidays and Events",
+      "expressions": [
+        {"korean": "설날이에요.", "english": "It's New Year's Day."},
+        {"korean": "추석이에요.", "english": "It's Chuseok."},
+        {"korean": "세배해요.", "english": "I'm doing sebae (New Year's bow)."},
+        {"korean": "송편 먹어요.", "english": "I'm eating songpyeon."},
+        {"korean": "한복 입어요.", "english": "I'm wearing hanbok."},
+        {"korean": "가족 만나러 가요.", "english": "I'm going to meet family."},
+        {"korean": "명절 음식 만들어요.", "english": "I'm making holiday food."},
+        {"korean": "명절에 윷놀이를 해요.", "english": "We play yutnori during holidays."}
+      ]
+    }
+  ]
+}

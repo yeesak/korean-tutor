@@ -1,0 +1,31 @@
+{
+  "name": "ai-demo-backend",
+  "version": "1.0.0",
+  "description": "Backend server for Shadowing 3x Tutor - proxies TTS, STT, and feedback APIs",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "test": "node --test src/*.test.js"
+  },
+  "keywords": [
+    "shadowing",
+    "korean",
+    "tts",
+    "stt",
+    "language-learning"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^3.3.2",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
