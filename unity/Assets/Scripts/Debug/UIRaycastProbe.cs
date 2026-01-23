@@ -4,7 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
-namespace ShadowingTutor.Debug
+namespace ShadowingTutor.Diagnostics
 {
     /// <summary>
     /// Debug probe that logs all UI raycast hits on touch/click.

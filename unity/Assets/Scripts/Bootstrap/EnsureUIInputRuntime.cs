@@ -110,11 +110,11 @@ namespace ShadowingTutor.Bootstrap
         private static void SpawnUIRaycastProbe()
         {
             // Check if probe already exists
-            if (Object.FindObjectOfType<ShadowingTutor.Debug.UIRaycastProbe>() != null)
+            if (Object.FindObjectOfType<ShadowingTutor.Diagnostics.UIRaycastProbe>() != null)
                 return;
 
             var probeGO = new GameObject("UIRaycastProbe");
-            probeGO.AddComponent<ShadowingTutor.Debug.UIRaycastProbe>();
+            probeGO.AddComponent<ShadowingTutor.Diagnostics.UIRaycastProbe>();
             Object.DontDestroyOnLoad(probeGO);
             Debug.Log("[UIINPUT] UIRaycastProbe auto-spawned for debugging");
         }
