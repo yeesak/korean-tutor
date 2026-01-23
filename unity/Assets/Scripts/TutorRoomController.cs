@@ -3446,63 +3446,65 @@ namespace ShadowingTutor
                 Debug.Log("[VoiceDecision] Flow complete -> CONTINUE");
                 SetState(TutorState.Feedback);
             }
-            else // Negative (or defaulted)
+            else // Negative (or defaulted to Negative after max reprompts)
             {
-                // Quit flow
-                yield return QuitWithClosingMessage(mySessionVersion);
+                // Return to Start screen (bypass season wrap-up)
+                Debug.Log("[VoiceDecision] Branching to Start screen (season wrap-up bypassed)");
+                yield return ReturnToStartScreen(mySessionVersion);
             }
         }
 
         /// <summary>
-        /// Play closing message and quit the app.
-        /// Uses ElevenLabs TTS via backend for the closing message.
+        /// Return to Start screen when user declines to continue.
+        /// Bypasses season wrap-up flow and resets to initial screen with START button.
         /// </summary>
-        private IEnumerator QuitWithClosingMessage(int sessionVersion)
+        private IEnumerator ReturnToStartScreen(int sessionVersion)
         {
-            Debug.Log("[VoiceDecision] Starting quit flow with closing message");
-            SetState(TutorState.End);
+            Debug.Log("[VoiceDecision] NEGATIVE detected -> Returning to Start screen (bypassing season wrap-up)");
 
-            string closingMessage = "알겠어요! 오늘 공부는 여기까지 할게요! 수고 많으셨습니다!";
-            Debug.Log($"[VoiceDecision] Speaking closing message: '{closingMessage}'");
+            // Debounce: mark voice decision as handled
+            if (!_voiceDecisionInProgress)
+            {
+                Debug.LogWarning("[VoiceDecision] ReturnToStartScreen called but no voice decision in progress - ignoring");
+                yield break;
+            }
 
-            bool ttsSuccess = true;
-            float fallbackDelay = 2f;
+            string closingMessage = "알겠어요! 처음 화면으로 돌아갈게요.";
+            Debug.Log($"[VoiceDecision] Speaking: '{closingMessage}'");
 
-            // Try to play TTS (ElevenLabs via backend)
+            // Try to play TTS (brief acknowledgment)
             if (ApiClient.IsBackendReachable && TtsPlayer.Instance != null)
             {
                 yield return PlayTtsAndWait(closingMessage);
             }
             else
             {
-                Debug.LogWarning("[VoiceDecision] Backend unreachable for closing TTS - using fallback delay");
-                ttsSuccess = false;
-                yield return new WaitForSeconds(fallbackDelay);
+                Debug.LogWarning("[VoiceDecision] Backend unreachable - skipping closing TTS");
+                yield return new WaitForSeconds(0.5f);
             }
 
+            // Check session validity before navigation
             if (!IsSessionValid(sessionVersion))
             {
-                Debug.Log("[VoiceDecision] Session invalidated during closing - aborting quit");
+                Debug.Log("[VoiceDecision] Session invalidated during closing - aborting navigation");
                 yield break;
             }
 
-            // Brief pause after audio ends
-            yield return new WaitForSeconds(0.5f);
+            // Brief pause
+            yield return new WaitForSeconds(0.3f);
 
-            // Clear progress
-            ClearSeasonProgress();
+            // === CLEANUP & RETURN TO START ===
+            Debug.Log("[VoiceDecision] Calling ResetSessionToHome() to return to Start screen");
 
-            // Quit the app
-            Debug.Log("[VoiceDecision] Quit triggered - closing app");
+            // ResetSessionToHome handles:
+            // - Incrementing session version (stops all coroutines)
+            // - Stopping TTS and MicRecorder
+            // - Clearing UI, comparison panel
+            // - Setting state to Home
+            // - Calling HideLessonUI()
+            ResetSessionToHome();
 
-#if UNITY_EDITOR
-            Debug.Log("[VoiceDecision] EDITOR: Application.Quit() would be called here");
-            // In editor, return to Home state instead of quitting
-            SetState(TutorState.Home);
-            HideLessonUI();
-#else
-            Application.Quit();
-#endif
+            Debug.Log("[VoiceDecision] Successfully returned to Start screen - START button should be visible");
         }
 
         #endregion
