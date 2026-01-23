@@ -158,9 +158,23 @@ namespace ShadowingTutor
         private const string PREFS_REMAINING = "SeasonProgress_Remaining";
         private const string PREFS_EXPRESSION_INDEX = "SeasonProgress_ExpressionIndex";
 
-        // YES/NO intent keywords
-        private static readonly string[] YesKeywords = { "네", "예", "응", "좋아", "해", "할래", "하고싶", "싶어", "공부", "다음", "계속" };
-        private static readonly string[] NoKeywords = { "아니", "싫어", "안해", "안 해", "그만", "끝", "됐어", "멈춰", "스톱" };
+        // YES/NO intent keywords (extended for voice-driven continuation)
+        private static readonly string[] YesKeywords = {
+            "네", "예", "응", "그래", "좋아", "가자", "넘어가", "계속", "진행", "해", "오케이", "ok",
+            "할래", "하고싶", "싶어", "공부", "다음", "해줘", "해 줘", "고고", "ㅇㅇ"
+        };
+        private static readonly string[] NoKeywords = {
+            "아니", "아니요", "싫어", "그만", "끝", "종료", "멈춰", "오늘은 여기까지", "피곤해", "하기 싫어",
+            "stop", "quit", "안해", "안 해", "됐어", "스톱", "쉬고싶", "쉬고 싶", "그만할래"
+        };
+
+        // Voice decision result enum
+        public enum VoiceDecision { Positive, Negative, Unknown }
+
+        // Voice-driven continuation state
+        private bool _voiceDecisionInProgress = false;
+        private int _voiceDecisionRepromptCount = 0;
+        private const int MAX_VOICE_REPROMPTS = 1;
 
         // Session versioning for safe cancellation
         // Incremented on every ResetSessionToHome() call
@@ -1783,6 +1797,14 @@ namespace ShadowingTutor
                                 // Season complete - break to season end handling
                                 break;
                             }
+
+                            // Voice-driven continuation: ask user if they want to continue
+                            // This gives user a natural exit point after each sentence
+                            yield return VoiceDrivenContinuation(6f);
+                            if (!IsSessionValid(mySessionVersion)) yield break;
+
+                            // If we reach here, user chose POSITIVE (continue)
+                            // The loop will naturally advance to next expression
                         }
                         else
                         {
@@ -1810,6 +1832,10 @@ namespace ShadowingTutor
                                 {
                                     break;
                                 }
+
+                                // Voice-driven continuation after skip
+                                yield return VoiceDrivenContinuation(6f);
+                                if (!IsSessionValid(mySessionVersion)) yield break;
                             }
                             else
                             {
@@ -3249,6 +3275,234 @@ namespace ShadowingTutor
 
             Debug.Log($"[TutorRoom] Intent unclear for: '{transcript}'");
             return 0;
+        }
+
+        /// <summary>
+        /// Classify transcript into VoiceDecision (Positive/Negative/Unknown).
+        /// More explicit than ParseYesNoIntent for voice-driven branching.
+        /// </summary>
+        private VoiceDecision ClassifyVoiceDecision(string transcript)
+        {
+            string cleanTranscript = TranscriptUtils.NormalizeTranscript(transcript);
+
+            if (string.IsNullOrEmpty(cleanTranscript))
+            {
+                Debug.Log("[VoiceDecision] Empty transcript -> Unknown");
+                return VoiceDecision.Unknown;
+            }
+
+            string lower = cleanTranscript.ToLower().Trim();
+
+            // Check for POSITIVE keywords
+            foreach (string keyword in YesKeywords)
+            {
+                if (lower.Contains(keyword.ToLower()))
+                {
+                    Debug.Log($"[VoiceDecision] POSITIVE detected: '{keyword}' in '{transcript}'");
+                    return VoiceDecision.Positive;
+                }
+            }
+
+            // Check for NEGATIVE keywords
+            foreach (string keyword in NoKeywords)
+            {
+                if (lower.Contains(keyword.ToLower()))
+                {
+                    Debug.Log($"[VoiceDecision] NEGATIVE detected: '{keyword}' in '{transcript}'");
+                    return VoiceDecision.Negative;
+                }
+            }
+
+            Debug.Log($"[VoiceDecision] UNKNOWN for: '{transcript}'");
+            return VoiceDecision.Unknown;
+        }
+
+        /// <summary>
+        /// Voice-driven continuation flow after sentence study completes.
+        /// Asks "다음으로 넘어가볼까요?" and processes user's spoken response.
+        /// </summary>
+        /// <param name="timeoutSeconds">Listening timeout (default 6s)</param>
+        /// <returns>True if user wants to continue, False if user wants to quit</returns>
+        private IEnumerator VoiceDrivenContinuation(float timeoutSeconds = 6f)
+        {
+            int mySessionVersion = _sessionVersion;
+            _voiceDecisionInProgress = true;
+            _voiceDecisionRepromptCount = 0;
+
+            Debug.Log("[VoiceDecision] Starting voice-driven continuation flow");
+
+            // Step 1: Play continuation prompt
+            string continuationPrompt = "다음으로 넘어가볼까요?";
+            Debug.Log($"[VoiceDecision] Speaking prompt: '{continuationPrompt}'");
+            yield return PlayTtsAndWait(continuationPrompt);
+
+            if (!IsSessionValid(mySessionVersion))
+            {
+                _voiceDecisionInProgress = false;
+                yield break;
+            }
+
+            // Step 2: Listen for response
+            VoiceDecision decision = VoiceDecision.Unknown;
+            bool decisionMade = false;
+
+            while (!decisionMade && IsSessionValid(mySessionVersion))
+            {
+                // Clear previous transcript
+                _transcriptText_value = "";
+
+                // Indicate listening state
+                if (_hintText != null) _hintText.text = "네 또는 아니요~";
+                SetState(TutorState.Recording);
+                Debug.Log("[VoiceDecision] Listening started...");
+
+                bool recordingStarted = MicRecorder.Instance?.StartRecording() ?? false;
+                if (!recordingStarted)
+                {
+                    Debug.LogWarning("[VoiceDecision] Failed to start recording -> treating as Unknown");
+                    decision = VoiceDecision.Unknown;
+                    break;
+                }
+
+                // Wait for recording with timeout
+                float elapsed = 0f;
+                while (_currentState == TutorState.Recording && elapsed < timeoutSeconds)
+                {
+                    yield return null;
+                    elapsed += Time.deltaTime;
+                }
+
+                if (elapsed >= timeoutSeconds)
+                {
+                    Debug.Log($"[VoiceDecision] Listening timeout after {elapsed:F1}s");
+                    MicRecorder.Instance?.StopRecordingGracefully();
+                }
+
+                // Wait for STT processing
+                float sttWait = 0f;
+                while (_currentState == TutorState.Scoring && sttWait < 5f)
+                {
+                    yield return null;
+                    sttWait += Time.deltaTime;
+                }
+
+                if (!IsSessionValid(mySessionVersion))
+                {
+                    _voiceDecisionInProgress = false;
+                    yield break;
+                }
+
+                // Step 3: Classify response
+                string transcript = _transcriptText_value;
+                Debug.Log($"[VoiceDecision] Transcript received: '{transcript}'");
+                decision = ClassifyVoiceDecision(transcript);
+
+                // Step 4: Handle decision
+                if (decision == VoiceDecision.Positive)
+                {
+                    Debug.Log("[VoiceDecision] VoiceDecision=POSITIVE -> continuing to next topic");
+                    decisionMade = true;
+                }
+                else if (decision == VoiceDecision.Negative)
+                {
+                    Debug.Log("[VoiceDecision] VoiceDecision=NEGATIVE -> initiating quit flow");
+                    decisionMade = true;
+                }
+                else // Unknown
+                {
+                    _voiceDecisionRepromptCount++;
+                    Debug.Log($"[VoiceDecision] VoiceDecision=UNKNOWN (reprompt #{_voiceDecisionRepromptCount})");
+
+                    if (_voiceDecisionRepromptCount <= MAX_VOICE_REPROMPTS)
+                    {
+                        // Reprompt once
+                        string reprompt = "네 또는 아니요로 말해 주세요.";
+                        Debug.Log($"[VoiceDecision] Reprompting: '{reprompt}'");
+                        yield return PlayTtsAndWait(reprompt);
+
+                        if (!IsSessionValid(mySessionVersion))
+                        {
+                            _voiceDecisionInProgress = false;
+                            yield break;
+                        }
+                        // Loop back to listen again
+                    }
+                    else
+                    {
+                        // Max reprompts exceeded -> default to NEGATIVE
+                        Debug.Log("[VoiceDecision] Max reprompts exceeded -> defaulting to NEGATIVE");
+                        decision = VoiceDecision.Negative;
+                        decisionMade = true;
+                    }
+                }
+            }
+
+            _voiceDecisionInProgress = false;
+
+            // Execute the decision
+            if (decision == VoiceDecision.Positive)
+            {
+                // Continue - the calling coroutine handles advancement
+                Debug.Log("[VoiceDecision] Flow complete -> CONTINUE");
+                SetState(TutorState.Feedback);
+            }
+            else // Negative (or defaulted)
+            {
+                // Quit flow
+                yield return QuitWithClosingMessage(mySessionVersion);
+            }
+        }
+
+        /// <summary>
+        /// Play closing message and quit the app.
+        /// Uses ElevenLabs TTS via backend for the closing message.
+        /// </summary>
+        private IEnumerator QuitWithClosingMessage(int sessionVersion)
+        {
+            Debug.Log("[VoiceDecision] Starting quit flow with closing message");
+            SetState(TutorState.End);
+
+            string closingMessage = "알겠어요! 오늘 공부는 여기까지 할게요! 수고 많으셨습니다!";
+            Debug.Log($"[VoiceDecision] Speaking closing message: '{closingMessage}'");
+
+            bool ttsSuccess = true;
+            float fallbackDelay = 2f;
+
+            // Try to play TTS (ElevenLabs via backend)
+            if (ApiClient.IsBackendReachable && TtsPlayer.Instance != null)
+            {
+                yield return PlayTtsAndWait(closingMessage);
+            }
+            else
+            {
+                Debug.LogWarning("[VoiceDecision] Backend unreachable for closing TTS - using fallback delay");
+                ttsSuccess = false;
+                yield return new WaitForSeconds(fallbackDelay);
+            }
+
+            if (!IsSessionValid(sessionVersion))
+            {
+                Debug.Log("[VoiceDecision] Session invalidated during closing - aborting quit");
+                yield break;
+            }
+
+            // Brief pause after audio ends
+            yield return new WaitForSeconds(0.5f);
+
+            // Clear progress
+            ClearSeasonProgress();
+
+            // Quit the app
+            Debug.Log("[VoiceDecision] Quit triggered - closing app");
+
+#if UNITY_EDITOR
+            Debug.Log("[VoiceDecision] EDITOR: Application.Quit() would be called here");
+            // In editor, return to Home state instead of quitting
+            SetState(TutorState.Home);
+            HideLessonUI();
+#else
+            Application.Quit();
+#endif
         }
 
         #endregion
