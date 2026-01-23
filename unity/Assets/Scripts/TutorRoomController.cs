@@ -3462,11 +3462,14 @@ namespace ShadowingTutor
         {
             Debug.Log("[VoiceDecision] NEGATIVE detected -> Returning to Start screen (bypassing season wrap-up)");
 
-            // Debounce: mark voice decision as handled
-            if (!_voiceDecisionInProgress)
+            // Log whether this was called during voice decision or forced
+            if (_voiceDecisionInProgress)
             {
-                Debug.LogWarning("[VoiceDecision] ReturnToStartScreen called but no voice decision in progress - ignoring");
-                yield break;
+                Debug.Log("[VoiceDecision] ReturnToStartScreen called during active voice decision");
+            }
+            else
+            {
+                Debug.Log("[VoiceDecision] ReturnToStartScreen FORCED - no active voice decision (allowed)");
             }
 
             string closingMessage = "알겠어요! 처음 화면으로 돌아갈게요.";
@@ -3505,6 +3508,27 @@ namespace ShadowingTutor
             ResetSessionToHome();
 
             Debug.Log("[VoiceDecision] Successfully returned to Start screen - START button should be visible");
+        }
+
+        /// <summary>
+        /// Force immediate return to Start screen. Can be called anytime.
+        /// Stops all active processes (TTS, STT, coroutines) and shows START button.
+        /// </summary>
+        public void ForceReturnToStartScreen()
+        {
+            Debug.Log("[Navigation] ForceReturnToStartScreen() called - forcing immediate return to Start");
+
+            // Reset voice decision state
+            _voiceDecisionInProgress = false;
+            _voiceDecisionRepromptCount = 0;
+
+            // ResetSessionToHome does all cleanup:
+            // - Stops TTS, MicRecorder, coroutines
+            // - Clears UI, sets state to Home
+            // - Shows START button
+            ResetSessionToHome();
+
+            Debug.Log("[Navigation] ForceReturnToStartScreen() complete - START button should be visible and clickable");
         }
 
         #endregion
