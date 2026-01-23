@@ -64,10 +64,11 @@ namespace ShadowingTutor.Bootstrap
 
             if (actionsAsset == null)
             {
-                Debug.LogError($"[UIINPUT] CRITICAL: Could not load InputActionAsset from Resources/{ResourcePath}. " +
-                              "UI input will NOT work! Run 'Tools/Input/Regenerate UI Actions Asset' in Editor.");
+                Debug.LogWarning($"[UIINPUT] Could not load InputActionAsset from Resources/{ResourcePath}. Creating fallback actions...");
+                actionsAsset = CreateFallbackUIActions();
             }
-            else
+
+            if (actionsAsset != null)
             {
                 // Assign actions asset if missing or different
                 if (inputModule.actionsAsset == null || inputModule.actionsAsset.name != actionsAsset.name)
@@ -82,6 +83,10 @@ namespace ShadowingTutor.Bootstrap
                 // CRITICAL: Enable the action asset so it processes input
                 actionsAsset.Enable();
                 Debug.Log("[UIINPUT] Actions ENABLED");
+            }
+            else
+            {
+                Debug.LogError("[UIINPUT] CRITICAL: Failed to create or load InputActionAsset. UI input will NOT work!");
             }
 
             // Log final status
@@ -119,6 +124,73 @@ namespace ShadowingTutor.Bootstrap
             Debug.Log("[UIINPUT] UIRaycastProbe auto-spawned for debugging");
         }
 #endif
+
+        private static InputActionAsset CreateFallbackUIActions()
+        {
+            try
+            {
+                var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+                asset.name = "UIActions_Fallback";
+
+                // Create UI action map
+                var uiMap = asset.AddActionMap("UI");
+
+                // Point action (for pointer position)
+                var pointAction = uiMap.AddAction("Point", InputActionType.PassThrough, expectedControlType: "Vector2");
+                pointAction.AddBinding("<Pointer>/position");
+                pointAction.AddBinding("<Touchscreen>/touch*/position");
+
+                // Click action (for button presses)
+                var clickAction = uiMap.AddAction("Click", InputActionType.PassThrough, expectedControlType: "Button");
+                clickAction.AddBinding("<Pointer>/press");
+                clickAction.AddBinding("<Touchscreen>/touch*/press");
+                clickAction.AddBinding("<Mouse>/leftButton");
+
+                // RightClick
+                var rightClickAction = uiMap.AddAction("RightClick", InputActionType.PassThrough, expectedControlType: "Button");
+                rightClickAction.AddBinding("<Mouse>/rightButton");
+
+                // MiddleClick
+                var middleClickAction = uiMap.AddAction("MiddleClick", InputActionType.PassThrough, expectedControlType: "Button");
+                middleClickAction.AddBinding("<Mouse>/middleButton");
+
+                // ScrollWheel
+                var scrollAction = uiMap.AddAction("ScrollWheel", InputActionType.PassThrough, expectedControlType: "Vector2");
+                scrollAction.AddBinding("<Mouse>/scroll");
+
+                // Navigate
+                var navigateAction = uiMap.AddAction("Navigate", InputActionType.PassThrough, expectedControlType: "Vector2");
+                navigateAction.AddCompositeBinding("2DVector")
+                    .With("Up", "<Keyboard>/w")
+                    .With("Up", "<Keyboard>/upArrow")
+                    .With("Down", "<Keyboard>/s")
+                    .With("Down", "<Keyboard>/downArrow")
+                    .With("Left", "<Keyboard>/a")
+                    .With("Left", "<Keyboard>/leftArrow")
+                    .With("Right", "<Keyboard>/d")
+                    .With("Right", "<Keyboard>/rightArrow");
+                navigateAction.AddBinding("<Gamepad>/leftStick");
+
+                // Submit
+                var submitAction = uiMap.AddAction("Submit", InputActionType.Button, expectedControlType: "Button");
+                submitAction.AddBinding("<Keyboard>/enter");
+                submitAction.AddBinding("<Keyboard>/space");
+                submitAction.AddBinding("<Gamepad>/buttonSouth");
+
+                // Cancel
+                var cancelAction = uiMap.AddAction("Cancel", InputActionType.Button, expectedControlType: "Button");
+                cancelAction.AddBinding("<Keyboard>/escape");
+                cancelAction.AddBinding("<Gamepad>/buttonEast");
+
+                Debug.Log("[UIINPUT] Fallback InputActionAsset created successfully");
+                return asset;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[UIINPUT] Failed to create fallback actions: {e.Message}");
+                return null;
+            }
+        }
 
         private static void AssignActionsToModule(InputSystemUIInputModule module, InputActionAsset asset)
         {
