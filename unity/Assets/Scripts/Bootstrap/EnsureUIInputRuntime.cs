@@ -104,11 +104,28 @@ namespace ShadowingTutor.Bootstrap
 
         private static void LogModuleActionStatus(InputSystemUIInputModule module)
         {
-            Debug.Log($"[UIINPUT] Action Status:");
-            Debug.Log($"[UIINPUT]   point: {(module.point?.action != null ? $"OK ({module.point.action.name}, enabled={module.point.action.enabled})" : "NULL")}");
-            Debug.Log($"[UIINPUT]   leftClick: {(module.leftClick?.action != null ? $"OK ({module.leftClick.action.name}, enabled={module.leftClick.action.enabled})" : "NULL")}");
-            Debug.Log($"[UIINPUT]   move: {(module.move?.action != null ? $"OK" : "NULL")}");
-            Debug.Log($"[UIINPUT]   submit: {(module.submit?.action != null ? $"OK" : "NULL")}");
+            // Single clear startup log proving UI input is configured
+            bool hasAsset = module.actionsAsset != null;
+            bool hasPoint = module.point?.action != null;
+            bool hasClick = module.leftClick?.action != null;
+            bool pointEnabled = hasPoint && module.point.action.enabled;
+            bool clickEnabled = hasClick && module.leftClick.action.enabled;
+
+            Debug.Log($"[UIINPUT] === UI INPUT STATUS ===");
+            Debug.Log($"[UIINPUT] actionsAsset: {(hasAsset ? module.actionsAsset.name : "NULL")}");
+            Debug.Log($"[UIINPUT] point: {(hasPoint ? $"{module.point.action.name} (enabled={pointEnabled})" : "NULL")}");
+            Debug.Log($"[UIINPUT] leftClick: {(hasClick ? $"{module.leftClick.action.name} (enabled={clickEnabled})" : "NULL")}");
+            Debug.Log($"[UIINPUT] move: {(module.move?.action != null ? "OK" : "NULL")}");
+            Debug.Log($"[UIINPUT] submit: {(module.submit?.action != null ? "OK" : "NULL")}");
+
+            if (hasAsset && hasPoint && hasClick && pointEnabled && clickEnabled)
+            {
+                Debug.Log("[UIINPUT] === UI INPUT READY - Touch/Click should work ===");
+            }
+            else
+            {
+                Debug.LogWarning("[UIINPUT] === UI INPUT INCOMPLETE - Some actions missing or disabled ===");
+            }
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -135,31 +152,31 @@ namespace ShadowingTutor.Bootstrap
                 // Create UI action map
                 var uiMap = asset.AddActionMap("UI");
 
-                // Point action (for pointer position)
-                var pointAction = uiMap.AddAction("Point", InputActionType.PassThrough, expectedControlType: "Vector2");
+                // Point action (for pointer position) - PassThrough for continuous position updates
+                var pointAction = uiMap.AddAction("Point", InputActionType.PassThrough);
                 pointAction.AddBinding("<Pointer>/position");
                 pointAction.AddBinding("<Touchscreen>/touch*/position");
 
-                // Click action (for button presses)
-                var clickAction = uiMap.AddAction("Click", InputActionType.PassThrough, expectedControlType: "Button");
+                // Click action (for button presses) - PassThrough to catch press/release
+                var clickAction = uiMap.AddAction("Click", InputActionType.PassThrough);
                 clickAction.AddBinding("<Pointer>/press");
                 clickAction.AddBinding("<Touchscreen>/touch*/press");
                 clickAction.AddBinding("<Mouse>/leftButton");
 
                 // RightClick
-                var rightClickAction = uiMap.AddAction("RightClick", InputActionType.PassThrough, expectedControlType: "Button");
+                var rightClickAction = uiMap.AddAction("RightClick", InputActionType.Button);
                 rightClickAction.AddBinding("<Mouse>/rightButton");
 
                 // MiddleClick
-                var middleClickAction = uiMap.AddAction("MiddleClick", InputActionType.PassThrough, expectedControlType: "Button");
+                var middleClickAction = uiMap.AddAction("MiddleClick", InputActionType.Button);
                 middleClickAction.AddBinding("<Mouse>/middleButton");
 
                 // ScrollWheel
-                var scrollAction = uiMap.AddAction("ScrollWheel", InputActionType.PassThrough, expectedControlType: "Vector2");
+                var scrollAction = uiMap.AddAction("ScrollWheel", InputActionType.PassThrough);
                 scrollAction.AddBinding("<Mouse>/scroll");
 
-                // Navigate
-                var navigateAction = uiMap.AddAction("Navigate", InputActionType.PassThrough, expectedControlType: "Vector2");
+                // Navigate - PassThrough for continuous input
+                var navigateAction = uiMap.AddAction("Navigate", InputActionType.PassThrough);
                 navigateAction.AddCompositeBinding("2DVector")
                     .With("Up", "<Keyboard>/w")
                     .With("Up", "<Keyboard>/upArrow")
@@ -172,22 +189,22 @@ namespace ShadowingTutor.Bootstrap
                 navigateAction.AddBinding("<Gamepad>/leftStick");
 
                 // Submit
-                var submitAction = uiMap.AddAction("Submit", InputActionType.Button, expectedControlType: "Button");
+                var submitAction = uiMap.AddAction("Submit", InputActionType.Button);
                 submitAction.AddBinding("<Keyboard>/enter");
                 submitAction.AddBinding("<Keyboard>/space");
                 submitAction.AddBinding("<Gamepad>/buttonSouth");
 
                 // Cancel
-                var cancelAction = uiMap.AddAction("Cancel", InputActionType.Button, expectedControlType: "Button");
+                var cancelAction = uiMap.AddAction("Cancel", InputActionType.Button);
                 cancelAction.AddBinding("<Keyboard>/escape");
                 cancelAction.AddBinding("<Gamepad>/buttonEast");
 
-                Debug.Log("[UIINPUT] Fallback InputActionAsset created successfully");
+                Debug.Log("[UIINPUT] Fallback InputActionAsset created successfully with 8 actions");
                 return asset;
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[UIINPUT] Failed to create fallback actions: {e.Message}");
+                Debug.LogError($"[UIINPUT] Failed to create fallback actions: {e.Message}\n{e.StackTrace}");
                 return null;
             }
         }
