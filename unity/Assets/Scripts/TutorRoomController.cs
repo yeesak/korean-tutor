@@ -1135,6 +1135,9 @@ namespace ShadowingTutor
 
         private void OnMainButtonClick()
         {
+            // FIRST LOG - confirms onClick listener was invoked
+            UnityEngine.Debug.Log("[TutorRoom] *** BUTTON CLICKED *** OnMainButtonClick invoked!");
+
             // Debounce
             float now = Time.unscaledTime;
             if (now - _lastButtonPressTime < _buttonDebounceTime)

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
+using ShadowingTutor.Debug;
 
 namespace ShadowingTutor.Bootstrap
 {
@@ -78,12 +79,48 @@ namespace ShadowingTutor.Bootstrap
 
                 // Verify actions are assigned to the module
                 AssignActionsToModule(inputModule, actionsAsset);
+
+                // CRITICAL: Enable the action asset so it processes input
+                actionsAsset.Enable();
+                Debug.Log("[UIINPUT] Actions ENABLED");
             }
 
             // Log final status
             string assetName = inputModule.actionsAsset != null ? inputModule.actionsAsset.name : "NONE";
             Debug.Log($"[UIINPUT] EventSystem ok, module=InputSystemUIInputModule, actionsAsset={assetName}");
+
+            // Log action binding status
+            LogModuleActionStatus(inputModule);
+
+            // Auto-attach UIRaycastProbe in debug builds
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            SpawnUIRaycastProbe();
+#endif
         }
+
+        private static void LogModuleActionStatus(InputSystemUIInputModule module)
+        {
+            Debug.Log($"[UIINPUT] Action Status:");
+            Debug.Log($"[UIINPUT]   point: {(module.point?.action != null ? $"OK ({module.point.action.name}, enabled={module.point.action.enabled})" : "NULL")}");
+            Debug.Log($"[UIINPUT]   leftClick: {(module.leftClick?.action != null ? $"OK ({module.leftClick.action.name}, enabled={module.leftClick.action.enabled})" : "NULL")}");
+            Debug.Log($"[UIINPUT]   move: {(module.move?.action != null ? $"OK" : "NULL")}");
+            Debug.Log($"[UIINPUT]   submit: {(module.submit?.action != null ? $"OK" : "NULL")}");
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private static void SpawnUIRaycastProbe()
+        {
+            // Check if probe already exists
+            if (Object.FindObjectOfType<UIRaycastProbe>() != null)
+                return;
+
+            var probeGO = new GameObject("UIRaycastProbe");
+            probeGO.AddComponent<UIRaycastProbe>();
+            Object.DontDestroyOnLoad(probeGO);
+            Debug.Log("[UIINPUT] UIRaycastProbe auto-spawned for debugging");
+        }
+#endif
+    }
 
         private static void AssignActionsToModule(InputSystemUIInputModule module, InputActionAsset asset)
         {
