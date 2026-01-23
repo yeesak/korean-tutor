@@ -120,7 +120,6 @@ namespace ShadowingTutor.Bootstrap
             Debug.Log("[UIINPUT] UIRaycastProbe auto-spawned for debugging");
         }
 #endif
-    }
 
         private static void AssignActionsToModule(InputSystemUIInputModule module, InputActionAsset asset)
         {
