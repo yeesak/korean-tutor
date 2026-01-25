@@ -341,26 +341,50 @@ namespace ShadowingTutor
             string configError;
             if (!AppConfig.Instance.ValidateConfiguration(out configError))
             {
-                Debug.LogError($"[TutorRoom] Configuration invalid: {configError}");
+                string env = AppConfig.Instance.CurrentEnvironment.ToString();
+                string url = AppConfig.Instance.BackendBaseUrl;
 
-                // Show blocking error on UI
+                Debug.LogError($"[TutorRoom] Configuration invalid: {configError}\n  Environment: {env}\n  URL: {url}");
+
+                // Log to diagnostics
+                try
+                {
+                    Diagnostics.FileLogger.Log($"CONFIG ERROR: {configError} | Env={env} | URL={url}");
+                    Diagnostics.DebugOverlay.RecordError($"Config: {configError}");
+                }
+                catch { /* Diagnostics may not be ready */ }
+
+                // Show detailed error on UI (include env/URL in debug builds)
                 if (_hintText != null)
                 {
-                    _hintText.text = configError;
+                    _hintText.gameObject.SetActive(true);
+                    #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    _hintText.text = $"{configError}\n\n[Debug] Env: {env}\nURL: {url}\n\n탭하여 재시도";
+                    #else
+                    _hintText.text = $"{configError}\n\n탭하여 재시도";
+                    #endif
                     _hintText.color = Color.red;
                 }
                 if (_statusText != null)
                 {
+                    _statusText.gameObject.SetActive(true);
                     _statusText.text = "설정 오류";
                 }
 
-                // Disable main button to prevent lesson start
+                // Keep button enabled for retry (don't leave user stuck)
                 if (_mainButton != null)
                 {
-                    _mainButton.interactable = false;
+                    _mainButton.interactable = true;
+                }
+                if (_mainButtonText != null)
+                {
+                    _mainButtonText.text = "재시도";
                 }
 
-                yield break;  // Stop here - don't proceed
+                // Mark as not connected to trigger retry on button press
+                _isBackendConnected = false;
+
+                yield break;  // Stop here - don't proceed to health check
             }
 
             string baseUrl = AppConfig.Instance?.BackendBaseUrl ?? "not configured";
@@ -1190,15 +1214,41 @@ namespace ShadowingTutor
 
         /// <summary>
         /// Retry backend connection when user taps "재시도" button.
+        /// Also re-validates configuration in case it was the source of the error.
         /// </summary>
         private IEnumerator RetryConnectionCoroutine()
         {
             // Show loading state
             if (_mainButtonText != null) _mainButtonText.text = "연결 중...";
             if (_mainButton != null) _mainButton.interactable = false;
-            if (_hintText != null) _hintText.text = "서버에 연결하는 중...";
+            if (_hintText != null) _hintText.text = "설정 확인 중...";
 
             yield return new WaitForSeconds(0.3f);  // Brief delay for UI feedback
+
+            // Re-validate config first (in case user changed settings)
+            string configError;
+            if (!AppConfig.Instance.ValidateConfiguration(out configError))
+            {
+                string env = AppConfig.Instance.CurrentEnvironment.ToString();
+                string url = AppConfig.Instance.BackendBaseUrl;
+                Debug.LogError($"[TutorRoom] Retry - config still invalid: {configError}");
+
+                if (_hintText != null)
+                {
+                    #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    _hintText.text = $"{configError}\n\n[Debug] Env: {env}\nURL: {url}\n\n탭하여 재시도";
+                    #else
+                    _hintText.text = $"{configError}\n\n탭하여 재시도";
+                    #endif
+                    _hintText.color = Color.red;
+                }
+                if (_mainButtonText != null) _mainButtonText.text = "재시도";
+                if (_mainButton != null) _mainButton.interactable = true;
+                yield break;
+            }
+
+            // Config is valid, now check health
+            if (_hintText != null) _hintText.text = "서버에 연결하는 중...";
 
             bool isReachable = false;
             string healthError = null;

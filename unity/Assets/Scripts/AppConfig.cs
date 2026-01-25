@@ -198,6 +198,54 @@ namespace ShadowingTutor
         }
 
         /// <summary>
+        /// Check if URL is a placeholder (not a real backend)
+        /// </summary>
+        public bool IsPlaceholderUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return true;
+            string lower = url.ToLower();
+            return lower.Contains("example.com") ||
+                   lower.Contains("your-backend") ||
+                   lower.Contains("your-real-backend") ||
+                   lower.Contains("placeholder");
+        }
+
+        /// <summary>
+        /// In debug builds only: if Production env has a placeholder URL, auto-switch to Local.
+        /// Returns true if a fallback was applied.
+        /// </summary>
+        public bool TryAutoFallbackForDebugBuild()
+        {
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (CurrentEnvironment == Environment.Production && IsPlaceholderUrl(_productionUrl))
+            {
+                string originalUrl = _productionUrl;
+                Environment fallbackEnv = Environment.Local;
+
+                // Log the fallback
+                string message = $"[AppConfig] DEBUG FALLBACK: Production URL is placeholder ({originalUrl}). " +
+                                $"Auto-switching to {fallbackEnv} environment.";
+                Debug.LogWarning(message);
+
+                // Log to diagnostics if available
+                try
+                {
+                    Diagnostics.FileLogger.Log(message);
+                    Diagnostics.DebugOverlay.RecordError($"Placeholder URL detected - using {fallbackEnv}");
+                }
+                catch { /* Diagnostics may not be initialized yet */ }
+
+                // Apply fallback (runtime only, don't persist)
+                _cachedEnvironment = fallbackEnv;
+
+                Debug.Log($"[AppConfig] Now using: {BackendBaseUrl}");
+                return true;
+            }
+            #endif
+            return false;
+        }
+
+        /// <summary>
         /// Whether current environment uses HTTPS
         /// </summary>
         public bool IsSecure => BackendBaseUrl.StartsWith("https://");
@@ -365,6 +413,11 @@ namespace ShadowingTutor
         {
             error = null;
 
+            // In debug builds, try auto-fallback if Production URL is placeholder
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            TryAutoFallbackForDebugBuild();
+            #endif
+
             if (string.IsNullOrEmpty(BackendBaseUrl))
             {
                 error = "Backend URL is empty";
@@ -377,26 +430,31 @@ namespace ShadowingTutor
                 return false;
             }
 
-            // CRITICAL: Block localhost on Android builds
+            // CRITICAL: Block localhost on Android builds (non-Editor, non-Development)
             #if UNITY_ANDROID && !UNITY_EDITOR
             if (IsLocalhostUrl(BackendBaseUrl))
             {
+                #if !DEVELOPMENT_BUILD
                 error = "localhost는 Android에서 사용할 수 없습니다.\n" +
                         "Settings에서 Production 환경을 선택하거나\n" +
                         "LAN IP를 설정해주세요.";
                 return false;
+                #else
+                // In development builds, allow localhost (for testing with adb reverse)
+                Debug.LogWarning("[AppConfig] Using localhost in development build. Ensure adb reverse is configured.");
+                #endif
             }
             #endif
 
-            // Check for placeholder URLs
-            if (BackendBaseUrl.Contains("YOUR-BACKEND") || BackendBaseUrl.Contains("example.com"))
+            // Check for placeholder URLs - block in release builds only
+            if (IsPlaceholderUrl(BackendBaseUrl))
             {
-                #if !UNITY_EDITOR
+                #if !UNITY_EDITOR && !DEVELOPMENT_BUILD
                 error = "Backend URL이 설정되지 않았습니다.\n" +
                         "AppConfig에서 Production URL을 설정해주세요.";
                 return false;
                 #else
-                Debug.LogWarning("[AppConfig] Using placeholder URL. Set production URL before building.");
+                Debug.LogWarning($"[AppConfig] Using placeholder URL ({BackendBaseUrl}). Set production URL before release build.");
                 #endif
             }
 
@@ -417,8 +475,7 @@ namespace ShadowingTutor
             get
             {
                 if (string.IsNullOrEmpty(_productionUrl)) return false;
-                if (_productionUrl.Contains("YOUR-BACKEND")) return false;
-                if (_productionUrl.Contains("example.com")) return false;
+                if (IsPlaceholderUrl(_productionUrl)) return false;
                 if (IsLocalhostUrl(_productionUrl)) return false;
                 return true;
             }
