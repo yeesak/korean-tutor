@@ -31,11 +31,28 @@ const { grokHandler } = require('./src/grok');
 const { getConfigStatus, getMode, logStartupStatus, isElevenLabsConfigured, isXAIConfigured } = require('./src/mockMode');
 const { isXAIRealtimeConfigured } = require('./src/xaiRealtimeClient');
 const { createRateLimiter } = require('./src/rateLimit');
+const {
+  stubTtsHandler,
+  stubSttHandler,
+  stubEvalHandler,
+  stubFeedbackHandler,
+  stubGrokHandler,
+  stubPronounceHandler
+} = require('./src/stubs');
+
+// Helper to select real or stub handler based on mode
+const isMockMode = () => getMode() === 'mock';
 
 // =========================
-// Strict Environment Validation (Production)
+// Strict Environment Validation (Production only, skip in MOCK mode)
 // =========================
 function validateEnvironment() {
+  // Skip validation in MOCK mode - stubs will be used
+  if ((process.env.MODE || '').toUpperCase() === 'MOCK') {
+    console.log('\n📦 MODE=MOCK - Skipping API key validation (using stubs)\n');
+    return;
+  }
+
   const required = [];
   const warnings = [];
 
@@ -55,6 +72,7 @@ function validateEnvironment() {
       warnings.forEach(v => console.warn(`   - ${v}`));
     }
     console.error('\nSet these in your .env file or deployment environment.\n');
+    console.error('💡 TIP: Set MODE=MOCK to run with stub data for testing.\n');
     process.exit(1);
   }
 
@@ -158,7 +176,7 @@ app.get('/api/health', (req, res) => {
 
   res.json({
     ok: true,
-    ts: new Date().toISOString(),
+    timestamp: new Date().toISOString(),  // Unity expects "timestamp" not "ts"
     version: '1.0.0',
     ...configStatus
   });
@@ -166,36 +184,48 @@ app.get('/api/health', (req, res) => {
 
 /**
  * POST /api/tts
- * Text-to-Speech via ElevenLabs
+ * Text-to-Speech via ElevenLabs (or stub in mock mode)
  * Body: { text: string, voice_id?: string }
  * Returns: audio/mpeg
  */
-app.post('/api/tts', ttsHandler);
+app.post('/api/tts', (req, res, next) => {
+  if (isMockMode()) return stubTtsHandler(req, res);
+  return ttsHandler(req, res, next);
+});
 
 /**
  * POST /api/stt
- * Speech-to-Text via ElevenLabs
+ * Speech-to-Text via ElevenLabs (or stub in mock mode)
  * Body: multipart/form-data with 'audio' file
  * Returns: { ok, text, language, confidence }
  */
-app.post('/api/stt', upload.single('audio'), sttHandler);
+app.post('/api/stt', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubSttHandler(req, res);
+  return sttHandler(req, res, next);
+});
 
 /**
  * POST /api/feedback
- * Get pronunciation/shadowing feedback - Deterministic CER + xAI Grok
+ * Get pronunciation/shadowing feedback (or stub in mock mode)
  * Body: { targetText: string, transcriptText: string } (also accepts sttText for backward compat)
  * Returns: Structured feedback with metrics, diff, grammar corrections
  */
-app.post('/api/feedback', feedbackHandler);
+app.post('/api/feedback', (req, res, next) => {
+  if (isMockMode()) return stubFeedbackHandler(req, res);
+  return feedbackHandler(req, res, next);
+});
 
 /**
  * POST /api/grok
- * Dynamic tutor line generation via xAI Grok
+ * Dynamic tutor line generation via xAI Grok (or stub in mock mode)
  * Body: { model?: string, messages: [{role, content}], temperature?: number, max_tokens?: number }
  * Returns: Grok chat completion response (choices[0].message.content)
  * Used by Unity GrokClient for context-aware Korean tutor speech
  */
-app.post('/api/grok', grokHandler);
+app.post('/api/grok', (req, res, next) => {
+  if (isMockMode()) return stubGrokHandler(req, res);
+  return grokHandler(req, res, next);
+});
 
 /**
  * GET /api/sentences
@@ -207,15 +237,18 @@ app.get('/api/sentences', getSentences);
 
 /**
  * POST /api/pronounce_grok
- * Voice-based pronunciation feedback via xAI Realtime API
+ * Voice-based pronunciation feedback via xAI Realtime API (or stub in mock mode)
  * Body: multipart/form-data with 'audio' file + targetText + transcriptText (optional)
  * Returns: { ok, tutor: { weakPronunciation, strongPronunciation, shortComment } }
  */
-app.post('/api/pronounce_grok', upload.single('audio'), pronounceHandler);
+app.post('/api/pronounce_grok', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubPronounceHandler(req, res);
+  return pronounceHandler(req, res, next);
+});
 
 /**
  * POST /api/eval
- * Combined evaluation endpoint - one call does everything:
+ * Combined evaluation endpoint (or stub in mock mode)
  * A) ElevenLabs STT -> transcriptText
  * B) Punctuation-insensitive text scoring
  * C) xAI Realtime pronunciation feedback (optional)
@@ -223,7 +256,10 @@ app.post('/api/pronounce_grok', upload.single('audio'), pronounceHandler);
  * Body: multipart/form-data with 'audio' file + targetText + locale (optional)
  * Returns: { ok, transcriptText, textAccuracyPercent, mistakePercent, diff, pronunciation, grammar }
  */
-app.post('/api/eval', upload.single('audio'), evalHandler);
+app.post('/api/eval', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubEvalHandler(req, res);
+  return evalHandler(req, res, next);
+});
 
 /**
  * POST /api/cache/clear
@@ -293,10 +329,15 @@ app.use((req, res) => {
 // Start server
 if (require.main === module) {
   const HOST = process.env.HOST || '0.0.0.0';
+  const mode = getMode();
+
   app.listen(PORT, HOST, () => {
     console.log(`\n🎯 AI-demo Backend Server`);
     console.log(`   Running on: http://${HOST}:${PORT}`);
     console.log(`   Environment: ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+    if (mode === 'mock') {
+      console.log(`   🧪 MODE: MOCK (using stub responses - no API keys needed)`);
+    }
     console.log(`   Rate Limit: 60 req/min per IP`);
 
     // Log detailed startup status (mode + missing keys)
@@ -305,20 +346,57 @@ if (require.main === module) {
     console.log(`   Endpoints:`);
     console.log(`   - GET  /health (root health check)`);
     console.log(`   - GET  /api/health (detailed)`);
-    console.log(`   - POST /api/tts`);
-    console.log(`   - POST /api/stt`);
-    console.log(`   - POST /api/feedback`);
-    console.log(`   - POST /api/grok (dynamic tutor lines)`);
-    console.log(`   - POST /api/pronounce_grok (xAI Realtime)`);
-    console.log(`   - POST /api/eval (combined: STT + scoring + pronunciation + grammar)`);
+    console.log(`   - POST /api/tts${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/stt${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/feedback${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/grok${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/pronounce_grok${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/eval${mode === 'mock' ? ' [STUB]' : ''}`);
     console.log(`   - GET  /api/sentences`);
     if (isDev) {
       console.log(`   - POST /api/cache/clear (dev only)`);
       console.log(`   - GET  /api/cache/stats (dev only)`);
     }
-    console.log(`   xAI Realtime: ${isXAIRealtimeConfigured() ? 'ENABLED' : 'DISABLED (no XAI_API_KEY)'}`)
+    if (mode !== 'mock') {
+      console.log(`   xAI Realtime: ${isXAIRealtimeConfigured() ? 'ENABLED' : 'DISABLED (no XAI_API_KEY)'}`)
+    }
+
+    // Print LAN IP helper for mobile testing
+    printLanIpHelp();
+
     console.log('');
   });
+}
+
+/**
+ * Print LAN IP addresses for mobile testing
+ */
+function printLanIpHelp() {
+  try {
+    const os = require('os');
+    const interfaces = os.networkInterfaces();
+    const lanIps = [];
+
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        // Skip internal and non-IPv4
+        if (iface.internal || iface.family !== 'IPv4') continue;
+        lanIps.push({ name, address: iface.address });
+      }
+    }
+
+    if (lanIps.length > 0) {
+      console.log('');
+      console.log('   📱 For Android/iOS testing, use one of these LAN URLs:');
+      lanIps.forEach(({ name, address }) => {
+        console.log(`      http://${address}:${PORT}  (${name})`);
+      });
+      console.log('');
+      console.log('   Test from phone browser: http://<IP>:' + PORT + '/api/health');
+    }
+  } catch (e) {
+    // Ignore network interface errors
+  }
 }
 
 module.exports = app;

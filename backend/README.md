@@ -2,6 +2,86 @@
 
 Backend server for Shadowing 3x Tutor - Korean language learning app.
 
+## Quick Start (No API Keys Needed)
+
+For **immediate testing** without API keys, use MOCK mode:
+
+```bash
+cd backend
+
+# Copy environment file
+cp .env.example .env
+
+# .env already has MODE=MOCK - just start!
+npm install
+npm start
+```
+
+The server starts with **stub responses** so the Unity app can connect and test immediately.
+
+---
+
+## 📱 Testing from Android/iOS (LAN)
+
+When running the backend on your PC, mobile devices on the same Wi-Fi can connect via your LAN IP.
+
+### Step 1: Find your PC's LAN IP
+
+```bash
+# macOS
+ipconfig getifaddr en0
+
+# Windows
+ipconfig | findstr "IPv4"
+
+# Linux
+hostname -I | awk '{print $1}'
+```
+
+### Step 2: Start the server
+
+```bash
+# The server binds to 0.0.0.0 by default (all interfaces)
+npm start
+```
+
+The startup log will show available LAN URLs:
+```
+📱 For Android/iOS testing, use one of these LAN URLs:
+   http://192.168.1.50:3000  (en0)
+```
+
+### Step 3: Test from phone browser
+
+Open this URL in your phone browser:
+```
+http://<YOUR_PC_IP>:3000/api/health
+```
+
+You should see:
+```json
+{"ok": true, "mode": "mock", ...}
+```
+
+### Step 4: Configure Unity app
+
+In the Unity app Settings or AppConfig:
+- Set **Environment** to `LAN`
+- Set **LAN IP** to your PC's IP (e.g., `192.168.1.50`)
+
+Or in `unity/Assets/Resources/AppConfig.asset`:
+- Set `_defaultLanIP` to your PC's IP
+
+### Troubleshooting LAN Connection
+
+| Problem | Solution |
+|---------|----------|
+| Phone can't reach server | Ensure PC and phone are on same Wi-Fi network |
+| Connection refused | Check PC firewall allows port 3000 |
+| "localhost" not working | localhost = phone's own address! Use PC's LAN IP |
+
+---
+
 ## Services
 
 | Service | Provider | Required Env Vars |
@@ -26,6 +106,21 @@ npm start
 
 # Or development mode with auto-reload
 npm run dev
+```
+
+## Mode Selection
+
+| Mode | API Keys | Behavior |
+|------|----------|----------|
+| `MODE=MOCK` | Not required | Returns stub data (for testing) |
+| `MODE=REAL` | Required | Uses real APIs |
+
+```bash
+# Mock mode (no keys needed)
+MODE=MOCK npm start
+
+# Real mode with keys
+MODE=REAL ELEVENLABS_API_KEY=xxx XAI_API_KEY=yyy npm start
 ```
 
 ## API Endpoints
