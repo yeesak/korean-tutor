@@ -1,5 +1,8 @@
 using System;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 namespace ShadowingTutor.Diagnostics
 {
@@ -54,7 +57,52 @@ namespace ShadowingTutor.Diagnostics
 
         private void Update()
         {
-            // Detect 3-finger tap to toggle overlay
+            if (ShouldToggleOverlayThisFrame())
+            {
+                _visible = !_visible;
+                Debug.Log($"[DebugOverlay] Toggled: {_visible}");
+            }
+        }
+
+        /// <summary>
+        /// Check if overlay should toggle this frame.
+        /// Supports both Input System and legacy Input Manager.
+        /// </summary>
+        private bool ShouldToggleOverlayThisFrame()
+        {
+            // Editor keyboard shortcut (F12)
+            #if UNITY_EDITOR
+                #if ENABLE_INPUT_SYSTEM
+                if (Keyboard.current != null && Keyboard.current.f12Key.wasPressedThisFrame)
+                    return true;
+                #elif ENABLE_LEGACY_INPUT_MANAGER
+                if (Input.GetKeyDown(KeyCode.F12))
+                    return true;
+                #endif
+            #endif
+
+            // Mobile 3-finger tap
+            #if ENABLE_INPUT_SYSTEM
+            if (Touchscreen.current != null)
+            {
+                var touches = Touchscreen.current.touches;
+                int pressedCount = 0;
+                bool allJustPressed = true;
+
+                foreach (var touch in touches)
+                {
+                    if (touch.press.isPressed)
+                    {
+                        pressedCount++;
+                        if (!touch.press.wasPressedThisFrame)
+                            allJustPressed = false;
+                    }
+                }
+
+                if (pressedCount == 3 && allJustPressed)
+                    return true;
+            }
+            #elif ENABLE_LEGACY_INPUT_MANAGER
             if (Input.touchCount == 3)
             {
                 bool allBegan = true;
@@ -63,19 +111,11 @@ namespace ShadowingTutor.Diagnostics
                     if (t.phase != TouchPhase.Began) allBegan = false;
                 }
                 if (allBegan)
-                {
-                    _visible = !_visible;
-                    Debug.Log($"[DebugOverlay] Toggled: {_visible}");
-                }
-            }
-
-            // Keyboard shortcut for Editor testing
-            #if UNITY_EDITOR
-            if (Input.GetKeyDown(KeyCode.F12))
-            {
-                _visible = !_visible;
+                    return true;
             }
             #endif
+
+            return false;
         }
 
         /// <summary>
