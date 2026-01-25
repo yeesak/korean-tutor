@@ -123,6 +123,92 @@ MODE=MOCK npm start
 MODE=REAL ELEVENLABS_API_KEY=xxx XAI_API_KEY=yyy npm start
 ```
 
+---
+
+## 🚀 Cloud Deployment (Render)
+
+Deploy to Render for a public HTTPS URL that works from any network.
+
+### Step 1: Push to GitHub
+
+```bash
+git add .
+git commit -m "Prepare for deployment"
+git push origin main
+```
+
+### Step 2: Create Render Service
+
+1. Go to [dashboard.render.com](https://dashboard.render.com)
+2. Click **New** → **Web Service**
+3. Connect your GitHub repo
+4. Render auto-detects `render.yaml` and configures:
+   - Root directory: `backend`
+   - Build: `npm ci`
+   - Start: `node index.js`
+
+### Step 3: Set Environment Variables
+
+In Render dashboard → **Environment** tab, add:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ELEVENLABS_API_KEY` | ✅ Yes | Get from [elevenlabs.io](https://elevenlabs.io) |
+| `XAI_API_KEY` | Optional | Get from [console.x.ai](https://console.x.ai) - enables Grok feedback |
+| `BACKEND_TOKEN` | Optional | If set, requires `Authorization: Bearer <token>` header |
+
+> **Note:** `MODE`, `NODE_ENV`, and `PORT` are already set in render.yaml
+
+### Step 4: Deploy
+
+Click **Create Web Service**. First deploy takes ~2-3 minutes.
+
+Your URL will be: `https://<service-name>.onrender.com`
+
+### Step 5: Verify
+
+```bash
+# Test health endpoint
+curl https://<your-app>.onrender.com/api/health
+
+# Expected response:
+{"ok":true,"mode":"real","ttsConfigured":true,...}
+```
+
+### Step 6: Update Unity
+
+In `unity/Assets/Resources/AppConfig.asset`:
+```
+_productionUrl = https://<your-app>.onrender.com
+```
+
+Or in Unity Inspector, set **Production URL** field.
+
+---
+
+## ✅ Production Checklist
+
+Before releasing your app:
+
+- [ ] **Health check works**: `curl https://<domain>/api/health` returns `{"ok":true}`
+- [ ] **Mode is REAL**: Response shows `"mode":"real"`
+- [ ] **TTS configured**: Response shows `"ttsConfigured":true`
+- [ ] **Unity URL set**: `AppConfig._productionUrl` = `https://<domain>`
+- [ ] **Release build passes**: `ProductionUrlBuildValidator` should not block the build
+- [ ] **Test on device**: Android/iOS can reach the server and TTS plays real audio
+
+### Optional Security
+
+If you set `BACKEND_TOKEN`:
+- All `/api/*` endpoints (except `/api/health`) require header:
+  ```
+  Authorization: Bearer <your-token>
+  ```
+- Unity client must be updated to send this header (not default behavior)
+- Health endpoint remains open for cloud health probes
+
+---
+
 ## API Endpoints
 
 ### GET /api/health

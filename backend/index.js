@@ -44,49 +44,54 @@ const {
 const isMockMode = () => getMode() === 'mock';
 
 // =========================
-// Strict Environment Validation (Production only, skip in MOCK mode)
+// Strict Environment Validation (REAL mode requires API keys)
 // =========================
 function validateEnvironment() {
+  const mode = (process.env.MODE || 'REAL').toUpperCase();
+
   // Skip validation in MOCK mode - stubs will be used
-  if ((process.env.MODE || '').toUpperCase() === 'MOCK') {
+  if (mode === 'MOCK') {
     console.log('\n📦 MODE=MOCK - Skipping API key validation (using stubs)\n');
     return;
   }
 
+  console.log('\n🔐 MODE=REAL - Validating required API keys...\n');
+
   const required = [];
   const warnings = [];
 
-  // At least one of ELEVENLABS or XAI must be configured for the app to be useful
+  // ElevenLabs is required for core TTS/STT functionality
   if (!process.env.ELEVENLABS_API_KEY) {
     required.push('ELEVENLABS_API_KEY (required for TTS/STT)');
   }
+  // xAI is optional but recommended for full functionality
   if (!process.env.XAI_API_KEY) {
-    warnings.push('XAI_API_KEY (required for Grok feedback - app will work with limited features)');
+    warnings.push('XAI_API_KEY (optional - enables Grok feedback/pronunciation)');
   }
 
   if (required.length > 0) {
-    console.error('\n❌ FATAL: Missing required environment variables:');
+    console.error('❌ FATAL: Missing required environment variables:');
     required.forEach(v => console.error(`   - ${v}`));
     if (warnings.length > 0) {
-      console.warn('\n⚠️  Also missing (optional but recommended):');
+      console.warn('\n⚠️  Also missing (optional):');
       warnings.forEach(v => console.warn(`   - ${v}`));
     }
-    console.error('\nSet these in your .env file or deployment environment.\n');
-    console.error('💡 TIP: Set MODE=MOCK to run with stub data for testing.\n');
+    console.error('\nSet these in your deployment environment (Render/Railway dashboard).\n');
+    console.error('💡 TIP: Set MODE=MOCK to run locally with stub data (no keys needed).\n');
     process.exit(1);
   }
 
   if (warnings.length > 0) {
-    console.warn('\n⚠️  Missing optional environment variables:');
+    console.warn('⚠️  Missing optional environment variables:');
     warnings.forEach(v => console.warn(`   - ${v}`));
-    console.warn('');
+    console.warn('   (Server will run with reduced functionality)\n');
   }
+
+  console.log('✅ Required API keys validated.\n');
 }
 
-// Run validation in production mode
-if (process.env.NODE_ENV === 'production') {
-  validateEnvironment();
-}
+// Always run validation on startup (respects MODE setting)
+validateEnvironment();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -138,6 +143,37 @@ app.use((req, res, next) => {
 // Rate limiting (60 requests per minute per IP)
 const rateLimiter = createRateLimiter(60);
 app.use('/api', rateLimiter);
+
+// Optional Bearer token auth (if BACKEND_TOKEN is set)
+// This is optional - if not set, all requests are allowed
+// Unity client does NOT need to send auth headers unless you set BACKEND_TOKEN
+const BACKEND_TOKEN = process.env.BACKEND_TOKEN;
+if (BACKEND_TOKEN) {
+  app.use('/api', (req, res, next) => {
+    // Skip auth for health check (needed for cloud health probes)
+    if (req.path === '/health') return next();
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Unauthorized',
+        details: 'Missing or invalid Authorization header. Use: Authorization: Bearer <token>'
+      });
+    }
+
+    const token = authHeader.slice(7); // Remove "Bearer "
+    if (token !== BACKEND_TOKEN) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Forbidden',
+        details: 'Invalid token'
+      });
+    }
+
+    next();
+  });
+}
 
 // Multer for file uploads (STT audio)
 const upload = multer({
@@ -360,6 +396,7 @@ if (require.main === module) {
     if (mode !== 'mock') {
       console.log(`   xAI Realtime: ${isXAIRealtimeConfigured() ? 'ENABLED' : 'DISABLED (no XAI_API_KEY)'}`)
     }
+    console.log(`   Auth: ${BACKEND_TOKEN ? 'ENABLED (Bearer token required)' : 'DISABLED (open access)'}`);
 
     // Print LAN IP helper for mobile testing
     printLanIpHelp();
