@@ -38,7 +38,7 @@ namespace ShadowingTutor
         [SerializeField] private string _stagingUrl = "https://staging-api.example.com";
 
         [Tooltip("URL for production environment (MUST be set before Android build)")]
-        [SerializeField] private string _productionUrl = "https://YOUR-BACKEND.onrender.com";
+        [SerializeField] private string _productionUrl = "https://korean-tutor.onrender.com";
 
         [Header("Default Settings")]
         [Tooltip("Default environment for Editor")]
