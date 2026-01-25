@@ -198,20 +198,23 @@ namespace ShadowingTutor
         }
 
         /// <summary>
-        /// Check if URL is a placeholder (not a real backend)
+        /// Check if URL is a placeholder (not a real backend).
+        /// Only checks for tokens that actually appear in this repo's default config.
         /// </summary>
         public bool IsPlaceholderUrl(string url)
         {
             if (string.IsNullOrEmpty(url)) return true;
             string lower = url.ToLower();
+            // Only check tokens actually used in this repo's defaults:
+            // - example.com: used in _stagingUrl, _productionUrl defaults
+            // - your-backend: used in _productionUrl default (YOUR-BACKEND.onrender.com)
             return lower.Contains("example.com") ||
-                   lower.Contains("your-backend") ||
-                   lower.Contains("your-real-backend") ||
-                   lower.Contains("placeholder");
+                   lower.Contains("your-backend");
         }
 
         /// <summary>
-        /// In debug builds only: if Production env has a placeholder URL, auto-switch to Local.
+        /// In debug builds only: if Production env has a placeholder URL, auto-switch to best available env.
+        /// Priority: LAN (if configured) > Staging (if non-placeholder) > Local (last resort).
         /// Returns true if a fallback was applied.
         /// </summary>
         public bool TryAutoFallbackForDebugBuild()
@@ -220,18 +223,21 @@ namespace ShadowingTutor
             if (CurrentEnvironment == Environment.Production && IsPlaceholderUrl(_productionUrl))
             {
                 string originalUrl = _productionUrl;
-                Environment fallbackEnv = Environment.Local;
+
+                // Choose best fallback environment (avoid localhost trap on device)
+                Environment fallbackEnv = SelectBestFallbackEnvironment();
+                string fallbackUrl = GetUrlForEnvironment(fallbackEnv);
 
                 // Log the fallback
                 string message = $"[AppConfig] DEBUG FALLBACK: Production URL is placeholder ({originalUrl}). " +
-                                $"Auto-switching to {fallbackEnv} environment.";
+                                $"Auto-switching to {fallbackEnv} ({fallbackUrl}).";
                 Debug.LogWarning(message);
 
                 // Log to diagnostics if available
                 try
                 {
                     Diagnostics.FileLogger.Log(message);
-                    Diagnostics.DebugOverlay.RecordError($"Placeholder URL detected - using {fallbackEnv}");
+                    Diagnostics.DebugOverlay.RecordError($"Placeholder URL - using {fallbackEnv}");
                 }
                 catch { /* Diagnostics may not be initialized yet */ }
 
@@ -243,6 +249,43 @@ namespace ShadowingTutor
             }
             #endif
             return false;
+        }
+
+        /// <summary>
+        /// Select the best fallback environment when Production is unavailable.
+        /// Priority: LAN (if user configured IP) > Staging (if non-placeholder) > Local.
+        /// </summary>
+        private Environment SelectBestFallbackEnvironment()
+        {
+            // Prefer LAN if user has configured a real IP (not default placeholder)
+            if (!string.IsNullOrEmpty(LanIP) && LanIP != _defaultLanIP)
+            {
+                return Environment.LAN;
+            }
+
+            // Prefer Staging if it has a non-placeholder URL
+            if (!IsPlaceholderUrl(_stagingUrl))
+            {
+                return Environment.Staging;
+            }
+
+            // Last resort: Local (may not work on device without adb reverse)
+            return Environment.Local;
+        }
+
+        /// <summary>
+        /// Get the backend URL for a specific environment (without switching to it).
+        /// </summary>
+        private string GetUrlForEnvironment(Environment env)
+        {
+            return env switch
+            {
+                Environment.Local => _localUrl,
+                Environment.LAN => _lanUrlTemplate.Replace("{IP}", LanIP),
+                Environment.Staging => _stagingUrl,
+                Environment.Production => _productionUrl,
+                _ => _localUrl
+            };
         }
 
         /// <summary>
