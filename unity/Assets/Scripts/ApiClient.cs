@@ -378,6 +378,10 @@ namespace ShadowingTutor
             string url = AppConfig.Instance.HealthUrl;
             Debug.Log($"[ApiClient] Health check: GET {url}");
 
+            // Log to diagnostics
+            Diagnostics.FileLogger.LogNetworkStart("GET", url);
+            Diagnostics.DebugOverlay.RecordNetworkRequest(url, "Checking...");
+
             _lastConnectivityCheck = Time.realtimeSinceStartup;
 
             using (UnityWebRequest request = UnityWebRequest.Get(url))
@@ -387,8 +391,15 @@ namespace ShadowingTutor
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
+                    string error = $"Health check failed: {request.error}";
                     MarkUnreachable(request.error);
-                    onError?.Invoke($"Health check failed: {request.error}");
+
+                    // Log to diagnostics
+                    Diagnostics.FileLogger.LogNetworkEnd(url, (int)request.responseCode, request.error);
+                    Diagnostics.DebugOverlay.RecordNetworkRequest(url, $"FAILED: {request.error}");
+                    Diagnostics.DebugOverlay.RecordError(error);
+
+                    onError?.Invoke(error);
                     yield break;
                 }
 
@@ -396,11 +407,18 @@ namespace ShadowingTutor
                 {
                     HealthResponse response = JsonUtility.FromJson<HealthResponse>(request.downloadHandler.text);
                     MarkReachable();
+
+                    // Log to diagnostics
+                    Diagnostics.FileLogger.LogNetworkEnd(url, 200, "OK");
+                    Diagnostics.DebugOverlay.RecordNetworkRequest(url, "OK");
+
                     onSuccess?.Invoke(response);
                 }
                 catch (Exception e)
                 {
-                    onError?.Invoke($"Failed to parse health response: {e.Message}");
+                    string error = $"Failed to parse health response: {e.Message}";
+                    Diagnostics.DebugOverlay.RecordError(error);
+                    onError?.Invoke(error);
                 }
             }
         }
