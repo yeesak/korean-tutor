@@ -1,14 +1,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
+#endif
 
 namespace ShadowingTutor.Diagnostics
 {
     /// <summary>
-    /// Debug probe that logs all UI raycast hits on touch/click.
-    /// Attach to any GameObject in the scene to enable.
+    /// Debug probe that logs UI raycast hits ONLY on click/tap begin.
+    /// No per-frame spam. Attach to any GameObject in the scene to enable.
     /// </summary>
     public class UIRaycastProbe : MonoBehaviour
     {
@@ -17,7 +20,6 @@ namespace ShadowingTutor.Diagnostics
 
         private PointerEventData _pointerEventData;
         private List<RaycastResult> _raycastResults = new List<RaycastResult>();
-        private bool _wasTouching = false;
 
         private void Start()
         {
@@ -26,39 +28,69 @@ namespace ShadowingTutor.Diagnostics
 
         private void Update()
         {
-            if (EventSystem.current == null)
+            // Only probe on actual click/tap begin (no spam)
+            if (!WasPointerPressedThisFrame(out Vector2 pointerPos))
             {
-                if (Time.frameCount % 300 == 0)
-                    UnityEngine.Debug.LogWarning("[UIRaycastProbe] No EventSystem.current!");
                 return;
             }
 
-            // Detect touch/click start
-            bool isTouching = false;
-            Vector2 pointerPos = Vector2.zero;
-
-            // Check touch input (New Input System)
-            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
+            if (EventSystem.current == null)
             {
-                isTouching = true;
-                pointerPos = Touchscreen.current.primaryTouch.position.ReadValue();
-            }
-            // Check mouse input (New Input System)
-            else if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            {
-                isTouching = true;
-                pointerPos = Mouse.current.position.ReadValue();
+                UnityEngine.Debug.LogWarning("[UIRaycastProbe] Click detected but NO EventSystem.current!");
+                return;
             }
 
-            // Log on touch begin or every frame if configured
-            bool shouldLog = _logEveryFrame || (_logOnTouch && isTouching && !_wasTouching);
-
-            if (shouldLog && isTouching)
+            if (_logOnTouch || _logEveryFrame)
             {
                 LogRaycastResults(pointerPos);
             }
+        }
 
-            _wasTouching = isTouching;
+        /// <summary>
+        /// Returns true ONLY on the frame when pointer/touch was pressed.
+        /// Supports both Input System and Legacy Input.
+        /// </summary>
+        private bool WasPointerPressedThisFrame(out Vector2 pos)
+        {
+            pos = Vector2.zero;
+
+            #if ENABLE_INPUT_SYSTEM
+            // Check touch input (New Input System) - any touch that just started
+            if (Touchscreen.current != null)
+            {
+                foreach (var touch in Touchscreen.current.touches)
+                {
+                    if (touch.press.wasPressedThisFrame)
+                    {
+                        pos = touch.position.ReadValue();
+                        return true;
+                    }
+                }
+            }
+
+            // Check mouse input (New Input System)
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                pos = Mouse.current.position.ReadValue();
+                return true;
+            }
+            #elif ENABLE_LEGACY_INPUT_MANAGER
+            // Check mouse input (Legacy)
+            if (Input.GetMouseButtonDown(0))
+            {
+                pos = Input.mousePosition;
+                return true;
+            }
+
+            // Check touch input (Legacy)
+            if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+            {
+                pos = Input.GetTouch(0).position;
+                return true;
+            }
+            #endif
+
+            return false;
         }
 
         private void LogRaycastResults(Vector2 screenPos)
@@ -76,8 +108,7 @@ namespace ShadowingTutor.Diagnostics
 
             if (_raycastResults.Count == 0)
             {
-                UnityEngine.Debug.LogWarning("[UIRaycastProbe] NO HITS! Check: Canvas has GraphicRaycaster? EventSystem has InputModule?");
-                LogEventSystemDiagnostics();
+                LogNoHitsDiagnostics(screenPos);
                 return;
             }
 
@@ -104,7 +135,7 @@ namespace ShadowingTutor.Diagnostics
                 UnityEngine.Debug.Log($"[UIRaycastProbe] Hit[{i}]: {go.name}{interactable}{raycastInfo} | depth={hit.depth} | path={path}");
             }
 
-            // Highlight if top hit is NOT the StartButton/MainButton
+            // Highlight if top hit is NOT a button
             var topHit = _raycastResults[0].gameObject;
             if (topHit.name != "StartButton" && topHit.name != "MainButton" &&
                 topHit.GetComponent<Button>() == null)
@@ -113,23 +144,36 @@ namespace ShadowingTutor.Diagnostics
             }
         }
 
-        private void LogEventSystemDiagnostics()
+        /// <summary>
+        /// Log actionable diagnostics when raycast finds no hits.
+        /// </summary>
+        private void LogNoHitsDiagnostics(Vector2 screenPos)
         {
             var es = EventSystem.current;
-            UnityEngine.Debug.Log($"[UIRaycastProbe] EventSystem: {es.name}, enabled={es.enabled}");
+            string moduleName = es.currentInputModule != null ? es.currentInputModule.GetType().Name : "NONE";
 
-            // Check input modules
-            var modules = es.GetComponents<BaseInputModule>();
-            foreach (var module in modules)
+            UnityEngine.Debug.LogWarning(
+                $"[UIRaycastProbe] NO HITS on click at ({screenPos.x:F0}, {screenPos.y:F0}).\n" +
+                $"  EventSystem: {es.name} (enabled={es.enabled})\n" +
+                $"  CurrentInputModule: {moduleName}"
+            );
+
+            // List all canvases and their GraphicRaycaster status
+            var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            UnityEngine.Debug.Log($"[UIRaycastProbe] Found {canvases.Length} Canvas(es):");
+            foreach (var canvas in canvases)
             {
-                UnityEngine.Debug.Log($"[UIRaycastProbe] InputModule: {module.GetType().Name}, enabled={module.enabled}");
+                var gr = canvas.GetComponent<GraphicRaycaster>();
+                string grStatus = gr != null ? $"GraphicRaycaster={gr.enabled}" : "NO GraphicRaycaster!";
+                UnityEngine.Debug.Log($"  - '{canvas.name}': renderMode={canvas.renderMode}, enabled={canvas.enabled}, {grStatus}");
             }
 
-            // Check for GraphicRaycasters
-            var raycasters = FindObjectsOfType<GraphicRaycaster>();
-            foreach (var rc in raycasters)
+            // List input modules on EventSystem
+            var modules = es.GetComponents<BaseInputModule>();
+            UnityEngine.Debug.Log($"[UIRaycastProbe] InputModules on EventSystem ({modules.Length}):");
+            foreach (var module in modules)
             {
-                UnityEngine.Debug.Log($"[UIRaycastProbe] GraphicRaycaster on '{rc.gameObject.name}', enabled={rc.enabled}");
+                UnityEngine.Debug.Log($"  - {module.GetType().Name}: enabled={module.enabled}");
             }
         }
 
@@ -154,8 +198,9 @@ namespace ShadowingTutor.Diagnostics
                 UnityEngine.Debug.LogError("[UIRaycastProbe] CONFLICT: StandaloneInputModule is ENABLED! Should use InputSystemUIInputModule only.");
             }
 
+            #if ENABLE_INPUT_SYSTEM
             // Check for InputSystemUIInputModule (NEW - should be present and enabled)
-            var inputSystemModule = es.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+            var inputSystemModule = es.GetComponent<InputSystemUIInputModule>();
             if (inputSystemModule == null)
             {
                 UnityEngine.Debug.LogError("[UIRaycastProbe] MISSING: InputSystemUIInputModule not found on EventSystem!");
@@ -178,6 +223,7 @@ namespace ShadowingTutor.Diagnostics
             // Check devices
             UnityEngine.Debug.Log($"[UIRaycastProbe] Touchscreen: {(Touchscreen.current != null ? "AVAILABLE" : "NOT AVAILABLE")}");
             UnityEngine.Debug.Log($"[UIRaycastProbe] Mouse: {(Mouse.current != null ? "AVAILABLE" : "NOT AVAILABLE")}");
+            #endif
         }
 
         private string GetGameObjectPath(GameObject go)
