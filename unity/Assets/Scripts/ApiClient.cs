@@ -386,7 +386,7 @@ namespace ShadowingTutor
 
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
-                request.timeout = 10;  // Short timeout for health check
+                request.timeout = 30;  // Allow time for Render free-tier cold start (30-60s)
                 yield return request.SendWebRequest();
 
                 if (request.result != UnityWebRequest.Result.Success)

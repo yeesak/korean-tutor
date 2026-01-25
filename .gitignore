@@ -40,6 +40,9 @@ logs/
 # Memory Profiler Snapshots
 /unity/*.snap
 
+# Unity Performance Test artifacts
+/unity/Assets/Resources/PerformanceTestRun*.json
+
 # Asset meta data should be tracked with .meta files
 # But ignore generated files
 /unity/Assets/AssetStoreTools*
