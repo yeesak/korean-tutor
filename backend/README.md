@@ -137,52 +137,104 @@ git commit -m "Prepare for deployment"
 git push origin main
 ```
 
-### Step 2: Create Render Service
+### Step 2: Create Render Service (Exact Steps)
 
-1. Go to [dashboard.render.com](https://dashboard.render.com)
-2. Click **New** → **Web Service**
-3. Connect your GitHub repo
-4. Render auto-detects `render.yaml` and configures:
-   - Root directory: `backend`
-   - Build: `npm ci`
-   - Start: `node index.js`
+1. Go to **[dashboard.render.com](https://dashboard.render.com)**
+2. Click **New +** button (top right) → **Web Service**
+3. Click **Build and deploy from a Git repository** → **Next**
+4. Connect GitHub if not already connected
+5. Find your repo and click **Connect**
+6. Render auto-detects `render.yaml` - you'll see:
+   - **Name**: `shadowing-tutor-backend`
+   - **Root Directory**: `backend`
+   - **Build Command**: `npm ci`
+   - **Start Command**: `node index.js`
+7. **BEFORE clicking Create** → scroll to **Environment Variables**
 
-### Step 3: Set Environment Variables
+### Step 3: Set Environment Variables (REQUIRED)
 
-In Render dashboard → **Environment** tab, add:
+Click **Add Environment Variable** for each:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ELEVENLABS_API_KEY` | ✅ Yes | Get from [elevenlabs.io](https://elevenlabs.io) |
-| `XAI_API_KEY` | Optional | Get from [console.x.ai](https://console.x.ai) - enables Grok feedback |
-| `BACKEND_TOKEN` | Optional | If set, requires `Authorization: Bearer <token>` header |
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `ELEVENLABS_API_KEY` | `your-key-here` | **REQUIRED** - Get from [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys) |
+| `XAI_API_KEY` | `your-key-here` | Optional - Get from [console.x.ai](https://console.x.ai) |
 
-> **Note:** `MODE`, `NODE_ENV`, and `PORT` are already set in render.yaml
+> **Already set by render.yaml** (don't add again):
+> - `MODE=REAL`
+> - `NODE_ENV=production`
+> - `PORT=10000`
 
 ### Step 4: Deploy
 
-Click **Create Web Service**. First deploy takes ~2-3 minutes.
+1. Click **Create Web Service**
+2. Wait for build (~2-3 minutes)
+3. Look for green **"Live"** badge
 
-Your URL will be: `https://<service-name>.onrender.com`
+### Step 5: Get Your URL
 
-### Step 5: Verify
+After deploy, your URL is shown at the top:
+```
+https://shadowing-tutor-backend.onrender.com
+```
+(The exact name depends on what you chose or Render generated)
+
+### Step 6: Verify Deployment
 
 ```bash
 # Test health endpoint
-curl https://<your-app>.onrender.com/api/health
+curl https://shadowing-tutor-backend.onrender.com/api/health
 
-# Expected response:
-{"ok":true,"mode":"real","ttsConfigured":true,...}
+# Expected response (all true):
+{
+  "ok": true,
+  "timestamp": "2024-01-25T12:00:00.000Z",
+  "version": "1.0.0",
+  "mode": "real",
+  "ttsConfigured": true,
+  "sttConfigured": true,
+  "llmConfigured": true,
+  "ttsProvider": "elevenlabs",
+  "sttProvider": "elevenlabs",
+  "llmProvider": "xai"
+}
 ```
 
-### Step 6: Update Unity
+Also test in browser: open `https://your-app.onrender.com/api/health`
 
-In `unity/Assets/Resources/AppConfig.asset`:
-```
-_productionUrl = https://<your-app>.onrender.com
+---
+
+## 🎮 Unity Configuration
+
+After deployment, update your Unity app to use the production URL.
+
+### Option A: Edit AppConfig Asset (Recommended)
+
+1. Open Unity project
+2. Navigate to **Project** window → `Assets/Resources/AppConfig.asset`
+3. Click on it to open in **Inspector**
+4. Find **Production Url** field
+5. Change from `https://YOUR-BACKEND.onrender.com` to your actual URL:
+   ```
+   https://shadowing-tutor-backend.onrender.com
+   ```
+6. **Save** (Ctrl+S / Cmd+S)
+
+### Option B: Edit via Script
+
+The field is `_productionUrl` in `AppConfig.cs`:
+```csharp
+[SerializeField] private string _productionUrl = "https://shadowing-tutor-backend.onrender.com";
 ```
 
-Or in Unity Inspector, set **Production URL** field.
+### Placeholder Detection
+
+The build validator (`ProductionUrlBuildValidator.cs`) blocks release builds if:
+- URL contains `"your-backend"` (case-insensitive)
+- URL contains `"example.com"`
+- URL is empty or localhost
+
+Once you set a real Render URL, the validator will pass.
 
 ---
 
@@ -190,16 +242,73 @@ Or in Unity Inspector, set **Production URL** field.
 
 Before releasing your app:
 
-- [ ] **Health check works**: `curl https://<domain>/api/health` returns `{"ok":true}`
-- [ ] **Mode is REAL**: Response shows `"mode":"real"`
-- [ ] **TTS configured**: Response shows `"ttsConfigured":true`
-- [ ] **Unity URL set**: `AppConfig._productionUrl` = `https://<domain>`
-- [ ] **Release build passes**: `ProductionUrlBuildValidator` should not block the build
-- [ ] **Test on device**: Android/iOS can reach the server and TTS plays real audio
+```bash
+# 1. Verify health endpoint
+curl https://<your-app>.onrender.com/api/health
+# Must return: {"ok":true,"mode":"real","ttsConfigured":true,...}
 
-### Optional Security
+# 2. Test TTS works
+curl -X POST https://<your-app>.onrender.com/api/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text":"안녕하세요"}' -o test.mp3
+# Must return valid MP3 audio file
+```
 
-If you set `BACKEND_TOKEN`:
+- [ ] Health returns `{"ok":true}`
+- [ ] Mode is `"real"` (not mock)
+- [ ] `ttsConfigured` is `true`
+- [ ] Unity `AppConfig._productionUrl` set to `https://<your-app>.onrender.com`
+- [ ] Release build passes (no `ProductionUrlBuildValidator` error)
+- [ ] Test on Android device: TTS plays real audio
+
+---
+
+## 🔧 Troubleshooting
+
+### Build Fails on Render
+
+| Error | Solution |
+|-------|----------|
+| `npm ci` fails | Check `package-lock.json` is committed |
+| `Cannot find module` | Ensure `rootDir: backend` in render.yaml |
+| Missing dependencies | Run `npm install` locally and commit `package-lock.json` |
+
+### Health Check Fails
+
+| Symptom | Solution |
+|---------|----------|
+| Timeout on `/api/health` | Check `healthCheckPath: /api/health` in render.yaml |
+| 503 Service Unavailable | Missing `ELEVENLABS_API_KEY` - check Render env vars |
+| Connection refused | Server not started - check Render logs |
+
+### Cold Start (Free Plan)
+
+Render free plan **spins down after 15 minutes of inactivity**. First request after idle takes 30-60 seconds.
+
+**Unity handling:**
+- The app already has retry logic in `TutorRoomController`
+- User sees "Connecting..." during cold start
+- Consider **Starter plan ($7/mo)** for always-on
+
+### Unity Build Blocked
+
+```
+ProductionUrlBuildValidator FAILED: Production URL is not configured
+```
+
+**Fix:** Set `_productionUrl` in `AppConfig.asset` to your real Render URL (not the placeholder).
+
+### TTS Returns Silence
+
+- Check `ELEVENLABS_API_KEY` is set correctly in Render
+- Test directly: `curl -X POST https://<url>/api/tts -H "Content-Type: application/json" -d '{"text":"test"}'`
+- Check Render logs for errors
+
+---
+
+## 🔒 Optional Security
+
+If you set `BACKEND_TOKEN` environment variable:
 - All `/api/*` endpoints (except `/api/health`) require header:
   ```
   Authorization: Bearer <your-token>
