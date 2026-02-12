@@ -46,6 +46,12 @@ namespace ShadowingTutor
         [Tooltip("Optional teeth driver. If null, auto-finds TtsTeethDriver.Instance.")]
         [SerializeField] private TtsTeethDriver teethDriver;
 
+        [Header("Animator Control")]
+        [Tooltip("Disable Animator during TTS to prevent jaw overwrite. Auto-finds if null.")]
+        [SerializeField] private Animator characterAnimator;
+        [Tooltip("Whether to disable Animator during speech")]
+        public bool disableAnimatorDuringSpeech = true;
+
         [Header("Diagnostics")]
         public bool verbose = true;
 
@@ -114,6 +120,20 @@ namespace ShadowingTutor
                 if (ttsSource != null && verbose)
                 {
                     Debug.Log($"[TTS-LipSync] Auto-bound to TtsPlayer AudioSource");
+                }
+            }
+
+            // Auto-find Animator on character if not set
+            if (characterAnimator == null && characterRoot != null)
+            {
+                characterAnimator = characterRoot.GetComponent<Animator>();
+                if (characterAnimator == null)
+                {
+                    characterAnimator = characterRoot.GetComponentInChildren<Animator>();
+                }
+                if (characterAnimator != null && verbose)
+                {
+                    Debug.Log($"[TTS-LipSync] Auto-found Animator on {characterAnimator.gameObject.name}");
                 }
             }
         }
@@ -342,6 +362,14 @@ namespace ShadowingTutor
                     Debug.Log($"[TTS-LipSync] Playback STARTED clip={ttsSource.clip.name} length={ttsSource.clip.length:F2}s");
                 }
                 DisableCompetingControllers();
+
+                // Disable Animator to prevent jaw/face overwrite
+                if (disableAnimatorDuringSpeech && characterAnimator != null)
+                {
+                    characterAnimator.enabled = false;
+                    if (verbose) Debug.Log($"[TTS-LipSync] Disabled Animator on {characterAnimator.gameObject.name}");
+                }
+
                 _logTimer = 0f;
             }
             else if (!playing && _wasPlaying)
@@ -352,6 +380,13 @@ namespace ShadowingTutor
                     Debug.Log("[TTS-LipSync] Playback STOPPED");
                 }
                 EnableCompetingControllers();
+
+                // Re-enable Animator
+                if (disableAnimatorDuringSpeech && characterAnimator != null)
+                {
+                    characterAnimator.enabled = true;
+                    if (verbose) Debug.Log($"[TTS-LipSync] Re-enabled Animator on {characterAnimator.gameObject.name}");
+                }
             }
             _wasPlaying = playing;
 
