@@ -250,6 +250,29 @@ namespace ShadowingTutor.Editor
                 var jawProp = so.FindProperty("_jawBone");
                 var jawBone = jawProp?.objectReferenceValue as Transform;
                 Debug.Log($"   - Jaw Bone: {(jawBone != null ? jawBone.name : "NOT SET")}");
+
+                var visemeProp = so.FindProperty("_enableVisemes");
+                Debug.Log($"   - Visemes Enabled: {(visemeProp?.boolValue ?? false)}");
+
+                // Count available viseme blendshapes
+                if (faceRenderer != null && faceRenderer.sharedMesh != null)
+                {
+                    int visemeCount = 0;
+                    string[] visemePatterns = { "viseme_aa", "viseme_ee", "viseme_oh", "viseme_pp", "viseme_ff", "viseme_ss" };
+                    for (int i = 0; i < faceRenderer.sharedMesh.blendShapeCount; i++)
+                    {
+                        string bsName = faceRenderer.sharedMesh.GetBlendShapeName(i).ToLower();
+                        foreach (string pattern in visemePatterns)
+                        {
+                            if (bsName.Contains(pattern))
+                            {
+                                visemeCount++;
+                                break;
+                            }
+                        }
+                    }
+                    Debug.Log($"   - Viseme Blendshapes Found: {visemeCount}");
+                }
             }
 
             // Check for conflicts
