@@ -7,7 +7,7 @@ namespace ShadowingTutor
     /// <summary>
     /// TTS-driven mouth animation controller with robust face mesh selection.
     /// Properly excludes teeth/tongue/eye meshes and finds the correct face renderer.
-    /// Disables competing LipSync controllers while TTS is speaking.
+    /// Drives mouth animation in LateUpdate to override other controllers.
     ///
     /// FRONTEND-ONLY: Does not touch backend/server/API code.
     /// </summary>
@@ -47,6 +47,8 @@ namespace ShadowingTutor
         private bool _isSpeaking = false;
         private bool _wasSpeaking = false;
         private List<MonoBehaviour> _disabledControllers = new List<MonoBehaviour>();
+        private bool _hasLoggedWiring = false;
+        private float[] _audioSamples = new float[256];
 
         // Singleton for easy access
         private static TtsMouthController _instance;
@@ -54,11 +56,9 @@ namespace ShadowingTutor
 
         // Excluded renderer name patterns (case-insensitive)
         private static readonly string[] ExcludedNames = {
-            "teeth", "tooth", "tongue", "eye", "eyelash", "brow", "hair", "scalp", "cap"
+            "teeth", "tooth", "tongue", "eye", "eyelash", "brow", "hair",
+            "scalp", "cap", "occlusion", "tear"
         };
-
-        // Preferred renderer name patterns (case-insensitive)
-        private static readonly string[] PreferredNames = { "face", "head", "body" };
 
         // Blendshape name patterns for mouth (in priority order)
         private static readonly string[][] BlendshapePriority = {
@@ -68,13 +68,9 @@ namespace ShadowingTutor
             new[] { "lipopen", "open" }
         };
 
-        /// <summary>
-        /// Auto-create TtsMouthController at runtime if none exists.
-        /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
         {
-            // Check if one already exists in scene
             if (_instance != null) return;
 
             TtsMouthController existing = Object.FindObjectOfType<TtsMouthController>();
@@ -84,17 +80,16 @@ namespace ShadowingTutor
                 return;
             }
 
-            // Create new instance
             GameObject go = new GameObject("_TtsMouthController");
             _instance = go.AddComponent<TtsMouthController>();
-            Debug.Log("[Mouth] Auto-created TtsMouthController at runtime");
+            Debug.Log("[TTS-Mouth] Auto-created controller");
         }
 
         private void Awake()
         {
             if (_instance != null && _instance != this)
             {
-                Debug.LogWarning($"[Mouth] Duplicate TtsMouthController, destroying {gameObject.name}");
+                Debug.LogWarning($"[TTS-Mouth] Duplicate controller, destroying {gameObject.name}");
                 Destroy(this);
                 return;
             }
@@ -107,44 +102,37 @@ namespace ShadowingTutor
             {
                 StartCoroutine(DelayedAutoWire());
             }
-            else
+            else if (_jawBone != null)
             {
-                // Store jaw base rotation if already assigned
-                if (_jawBone != null)
-                {
-                    _jawBaseRotation = _jawBone.localRotation;
-                }
+                _jawBaseRotation = _jawBone.localRotation;
             }
         }
 
-        /// <summary>
-        /// Wait for character to be loaded before auto-wiring.
-        /// </summary>
         private IEnumerator DelayedAutoWire()
         {
             float timeout = 5f;
             float elapsed = 0f;
 
-            // Wait for character root to be available
             while (FindCharacterRoot() == null && elapsed < timeout)
             {
                 elapsed += 0.2f;
                 yield return new WaitForSeconds(0.2f);
             }
 
-            // Additional frame for renderers to initialize
-            yield return null;
+            yield return null; // Extra frame for renderers
 
             AutoWireAll();
 
-            // Store jaw base rotation after wiring
             if (_jawBone != null)
             {
                 _jawBaseRotation = _jawBone.localRotation;
             }
         }
 
-        private void Update()
+        /// <summary>
+        /// LateUpdate ensures we override any other controllers that modify blendshapes in Update
+        /// </summary>
+        private void LateUpdate()
         {
             // Get RMS from TTS audio source
             float rms = GetCurrentRms();
@@ -155,7 +143,7 @@ namespace ShadowingTutor
             // Handle state transitions
             if (speaking != _wasSpeaking)
             {
-                OnSpeakingStateChanged(speaking);
+                OnSpeakingStateChanged(speaking, rms);
                 _wasSpeaking = speaking;
             }
 
@@ -196,15 +184,14 @@ namespace ShadowingTutor
 
             try
             {
-                float[] samples = new float[256];
-                _ttsAudioSource.GetOutputData(samples, 0);
+                _ttsAudioSource.GetOutputData(_audioSamples, 0);
 
                 float sum = 0f;
-                for (int i = 0; i < samples.Length; i++)
+                for (int i = 0; i < _audioSamples.Length; i++)
                 {
-                    sum += samples[i] * samples[i];
+                    sum += _audioSamples[i] * _audioSamples[i];
                 }
-                return Mathf.Sqrt(sum / samples.Length);
+                return Mathf.Sqrt(sum / _audioSamples.Length);
             }
             catch
             {
@@ -212,11 +199,13 @@ namespace ShadowingTutor
             }
         }
 
-        private void OnSpeakingStateChanged(bool speaking)
+        private void OnSpeakingStateChanged(bool speaking, float rms)
         {
             if (speaking)
             {
-                Debug.Log($"[Mouth] Speaking=TRUE");
+                float weight = Mathf.Clamp01((rms - _noiseGate) * _sensitivity) * _maxBlendshapeWeight;
+                Debug.Log($"[TTS-Mouth] Speaking=TRUE rms={rms:F4} weight={weight:F1}");
+
                 if (_overrideWhileSpeaking)
                 {
                     DisableCompetingControllers();
@@ -224,8 +213,8 @@ namespace ShadowingTutor
             }
             else
             {
-                Debug.Log($"[Mouth] Speaking=FALSE");
-                // Return mouth to neutral
+                Debug.Log("[TTS-Mouth] Speaking=FALSE -> reset mouth");
+
                 _targetOpenAmount = 0f;
                 _currentOpenAmount = 0f;
 
@@ -250,23 +239,28 @@ namespace ShadowingTutor
         {
             _disabledControllers.Clear();
 
-            // Find all MonoBehaviours that might conflict
-            MonoBehaviour[] allBehaviors = FindObjectsOfType<MonoBehaviour>();
+            // Find LipSyncController specifically
+            LipSyncController lipSync = FindObjectOfType<LipSyncController>();
+            if (lipSync != null && lipSync.enabled)
+            {
+                lipSync.enabled = false;
+                _disabledControllers.Add(lipSync);
+                Debug.Log("[TTS-Mouth] Disabled LipSyncController while TTS speaking");
+            }
 
+            // Also find by name pattern
+            MonoBehaviour[] allBehaviors = FindObjectsOfType<MonoBehaviour>();
             foreach (var mb in allBehaviors)
             {
                 if (mb == null || mb == this || !mb.enabled) continue;
+                if (_disabledControllers.Contains(mb)) continue;
 
                 string typeName = mb.GetType().Name;
-
-                // Check if this is a competing lip sync controller
-                if (typeName.Contains("LipSync") || typeName.Contains("Mouth"))
+                if (typeName.Contains("LipSync") && !(mb is TtsMouthController))
                 {
-                    if (mb is TtsMouthController) continue; // Don't disable ourselves
-
                     mb.enabled = false;
                     _disabledControllers.Add(mb);
-                    Debug.Log($"[Mouth] Speaking=TRUE -> disabling {typeName} on {mb.gameObject.name}");
+                    Debug.Log($"[TTS-Mouth] Disabled {typeName} while TTS speaking");
                 }
             }
         }
@@ -278,53 +272,43 @@ namespace ShadowingTutor
                 if (mb != null)
                 {
                     mb.enabled = true;
-                    Debug.Log($"[Mouth] Speaking=FALSE -> enabling {mb.GetType().Name} on {mb.gameObject.name}");
+                    Debug.Log($"[TTS-Mouth] Re-enabled {mb.GetType().Name} after TTS");
                 }
             }
             _disabledControllers.Clear();
         }
 
-        /// <summary>
-        /// Auto-wire all components: TTS AudioSource, Face Renderer, Blendshape/Jaw
-        /// </summary>
         public void AutoWireAll()
         {
-            Debug.Log("[Mouth] === Auto-wiring TTS Mouth Controller ===");
+            Debug.Log("[TTS-Mouth] === Starting Auto-Wire ===");
 
-            // 1. Find TTS AudioSource
             WireTtsAudioSource();
 
-            // 2. Find character root
             Transform characterRoot = FindCharacterRoot();
             if (characterRoot == null)
             {
-                Debug.LogWarning("[Mouth] Character root not found");
+                Debug.LogWarning("[TTS-Mouth] Character root not found");
                 return;
             }
 
-            // 3. Find face renderer with scoring
             WireFaceRenderer(characterRoot);
-
-            // 4. Find mouth blendshape or jaw bone
             WireMouthTarget();
 
-            Debug.Log("[Mouth] === Auto-wiring complete ===");
+            Debug.Log("[TTS-Mouth] === Auto-Wire Complete ===");
+            _hasLoggedWiring = true;
         }
 
         private void WireTtsAudioSource()
         {
-            // Try to find TtsPlayer
             TtsPlayer ttsPlayer = TtsPlayer.Instance;
 
             if (ttsPlayer == null)
             {
-                // Search by type
                 ttsPlayer = FindObjectOfType<TtsPlayer>();
             }
 
             if (ttsPlayer == null)
             {
-                // Search by name
                 GameObject[] allObjects = FindObjectsOfType<GameObject>();
                 foreach (var go in allObjects)
                 {
@@ -338,12 +322,9 @@ namespace ShadowingTutor
 
             if (ttsPlayer != null)
             {
-                // Get AudioSource on same GameObject
                 _ttsAudioSource = ttsPlayer.GetComponent<AudioSource>();
-
                 if (_ttsAudioSource == null)
                 {
-                    // Search children
                     _ttsAudioSource = ttsPlayer.GetComponentInChildren<AudioSource>();
                 }
             }
@@ -351,17 +332,16 @@ namespace ShadowingTutor
             if (_ttsAudioSource != null)
             {
                 string clipName = _ttsAudioSource.clip != null ? _ttsAudioSource.clip.name : "null";
-                Debug.Log($"[Mouth] TTS AudioSource: {GetFullPath(_ttsAudioSource.transform)} clip={clipName}");
+                Debug.Log($"[TTS-Mouth] Bound AudioSource={GetFullPath(_ttsAudioSource.transform)} clip={clipName}");
             }
             else
             {
-                Debug.LogWarning("[Mouth] TTS AudioSource: NOT FOUND");
+                Debug.LogWarning("[TTS-Mouth] AudioSource: NOT FOUND");
             }
         }
 
         private Transform FindCharacterRoot()
         {
-            // Try common paths
             string[] paths = { "Avatar/CharacterModel", "CharacterModel", "Avatar" };
 
             foreach (string path in paths)
@@ -373,7 +353,6 @@ namespace ShadowingTutor
                 }
             }
 
-            // Try to find by CC_Base_Body
             SkinnedMeshRenderer[] renderers = FindObjectsOfType<SkinnedMeshRenderer>();
             foreach (var smr in renderers)
             {
@@ -397,7 +376,6 @@ namespace ShadowingTutor
         {
             SkinnedMeshRenderer[] renderers = characterRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
 
-            // Score each renderer
             SkinnedMeshRenderer bestRenderer = null;
             int bestScore = int.MinValue;
             string bestReason = "";
@@ -417,30 +395,39 @@ namespace ShadowingTutor
                     }
                 }
 
-                if (excluded)
-                {
-                    continue;
-                }
+                if (excluded) continue;
 
                 int score = 0;
                 string reason = "";
 
-                // +100 if name contains face or head
-                foreach (string pref in PreferredNames)
+                // PRIORITY: CC_Base_Body gets +1000 (CC characters use this for visemes)
+                if (smr.name == "CC_Base_Body")
                 {
-                    if (nameLower.Contains(pref))
-                    {
-                        score += 100;
-                        reason += $"+100(name:{pref}) ";
-                        break;
-                    }
+                    score += 1000;
+                    reason += "+1000(CC_Base_Body) ";
+                }
+                // +100 if name contains body, face, or head
+                else if (nameLower.Contains("body"))
+                {
+                    score += 100;
+                    reason += "+100(body) ";
+                }
+                else if (nameLower.Contains("face"))
+                {
+                    score += 100;
+                    reason += "+100(face) ";
+                }
+                else if (nameLower.Contains("head"))
+                {
+                    score += 100;
+                    reason += "+100(head) ";
                 }
 
                 // +50 if has blendshapes
                 if (smr.sharedMesh != null && smr.sharedMesh.blendShapeCount > 0)
                 {
                     score += 50;
-                    reason += $"+50(blendshapes:{smr.sharedMesh.blendShapeCount}) ";
+                    reason += $"+50(bs:{smr.sharedMesh.blendShapeCount}) ";
 
                     // +5 per mouth-related blendshape
                     int mouthShapes = 0;
@@ -456,7 +443,7 @@ namespace ShadowingTutor
                     if (mouthShapes > 0)
                     {
                         score += mouthShapes * 5;
-                        reason += $"+{mouthShapes * 5}(mouthShapes:{mouthShapes}) ";
+                        reason += $"+{mouthShapes * 5}(mouth:{mouthShapes}) ";
                     }
                 }
 
@@ -472,12 +459,33 @@ namespace ShadowingTutor
 
             if (_faceRenderer != null)
             {
+                string meshName = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.name : "null";
                 int blendCount = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.blendShapeCount : 0;
-                Debug.Log($"[Mouth] FaceRenderer selected: {GetFullPath(_faceRenderer.transform)} blendShapeCount={blendCount} score={bestScore} ({bestReason.Trim()})");
+
+                Debug.Log($"[TTS-Mouth] FaceRenderer={GetFullPath(_faceRenderer.transform)} mesh={meshName} blendShapeCount={blendCount}");
+                Debug.Log($"[TTS-Mouth] Score={bestScore} ({bestReason.Trim()})");
+
+                // Dump first 50 blendshape names
+                if (_faceRenderer.sharedMesh != null && blendCount > 0)
+                {
+                    System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                    sb.Append("[TTS-Mouth] BlendShapes: ");
+                    int dumpCount = Mathf.Min(blendCount, 50);
+                    for (int i = 0; i < dumpCount; i++)
+                    {
+                        if (i > 0) sb.Append(", ");
+                        sb.Append($"{i}={_faceRenderer.sharedMesh.GetBlendShapeName(i)}");
+                    }
+                    if (blendCount > 50)
+                    {
+                        sb.Append($", ... ({blendCount - 50} more)");
+                    }
+                    Debug.Log(sb.ToString());
+                }
             }
             else
             {
-                Debug.LogWarning("[Mouth] FaceRenderer: NOT FOUND (all renderers excluded or no valid candidates)");
+                Debug.LogWarning("[TTS-Mouth] FaceRenderer: NOT FOUND (all excluded or no candidates)");
             }
         }
 
@@ -503,17 +511,16 @@ namespace ShadowingTutor
                             {
                                 _mouthBlendshapeIndex = i;
                                 _selectedBlendshapeName = _faceRenderer.sharedMesh.GetBlendShapeName(i);
-                                Debug.Log($"[Mouth] Blendshape selected: {_selectedBlendshapeName} index={i}");
+                                Debug.Log($"[TTS-Mouth] Using blendshape index={i} name={_selectedBlendshapeName}");
                                 return;
                             }
                         }
                     }
                 }
 
-                Debug.LogWarning("[Mouth] No suitable mouth blendshape found, trying jaw bone fallback");
+                Debug.LogWarning("[TTS-Mouth] No mouth blendshape found, trying jaw bone");
             }
 
-            // Fallback: find jaw bone
             WireJawBone();
         }
 
@@ -531,12 +538,12 @@ namespace ShadowingTutor
                 {
                     _jawBone = found;
                     _jawBaseRotation = _jawBone.localRotation;
-                    Debug.Log($"[Mouth] Jaw bone selected: {GetFullPath(_jawBone)}");
+                    Debug.Log($"[TTS-Mouth] Using jaw bone: {GetFullPath(_jawBone)}");
                     return;
                 }
             }
 
-            Debug.LogWarning("[Mouth] Jaw bone: NOT FOUND");
+            Debug.LogWarning("[TTS-Mouth] Jaw bone: NOT FOUND");
         }
 
         private Transform FindBoneRecursive(Transform parent, string name)
@@ -565,9 +572,7 @@ namespace ShadowingTutor
 
         private void OnDestroy()
         {
-            // Re-enable any controllers we disabled
             EnableCompetingControllers();
-
             if (_instance == this)
                 _instance = null;
         }
@@ -576,6 +581,7 @@ namespace ShadowingTutor
         [ContextMenu("Re-Wire All")]
         private void EditorRewire()
         {
+            _hasLoggedWiring = false;
             AutoWireAll();
         }
 
@@ -585,6 +591,7 @@ namespace ShadowingTutor
             if (_faceRenderer != null && _mouthBlendshapeIndex >= 0)
             {
                 _faceRenderer.SetBlendShapeWeight(_mouthBlendshapeIndex, _maxBlendshapeWeight);
+                Debug.Log($"[TTS-Mouth] Test: mouth OPEN weight={_maxBlendshapeWeight}");
             }
             if (_jawBone != null)
             {
@@ -598,6 +605,7 @@ namespace ShadowingTutor
             if (_faceRenderer != null && _mouthBlendshapeIndex >= 0)
             {
                 _faceRenderer.SetBlendShapeWeight(_mouthBlendshapeIndex, 0f);
+                Debug.Log("[TTS-Mouth] Test: mouth CLOSED");
             }
             if (_jawBone != null)
             {
@@ -610,17 +618,16 @@ namespace ShadowingTutor
         {
             if (_faceRenderer == null || _faceRenderer.sharedMesh == null)
             {
-                Debug.Log("No face renderer or mesh");
+                Debug.Log("[TTS-Mouth] No face renderer or mesh");
                 return;
             }
 
             int count = _faceRenderer.sharedMesh.blendShapeCount;
-            Debug.Log($"[{_faceRenderer.name}] has {count} blendshapes:");
+            Debug.Log($"[TTS-Mouth] {_faceRenderer.name} has {count} blendshapes:");
 
             for (int i = 0; i < count; i++)
             {
-                string name = _faceRenderer.sharedMesh.GetBlendShapeName(i);
-                Debug.Log($"  [{i}] {name}");
+                Debug.Log($"  [{i}] {_faceRenderer.sharedMesh.GetBlendShapeName(i)}");
             }
         }
 #endif
