@@ -1,0 +1,1093 @@
+{
+    "timestamp": "2026-02-12 17:23:49",
+    "activeScenePath": "",
+    "runtimeInstantiatedPrefabPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab",
+    "runtimeInstantiatedPrefabGuid": "f579a814879c8da469b3cf2d178c4206",
+    "availablePrefabs": [
+        {
+            "name": "Edumeta_CharacterGirl_AAA",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA.prefab",
+            "guid": "90caf32f9352fd84ea15ec8739dab1e7",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_idle_Smile_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_idle_Smile_A.prefab",
+            "guid": "2db81e3cf85757445aefddfc2bc05d7c",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_A.prefab",
+            "guid": "820bdb2950ebcd6458fa973680feaabe",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_B",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_B.prefab",
+            "guid": "a3893e97d18aebf4ba5d640f2597eda4",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_C",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_C.prefab",
+            "guid": "433939d3b3a60694baed47986b7253d2",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_C_Add33 1",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_C_Add33 1.prefab",
+            "guid": "ac2fd5f9d66529d48b850c9b880774a1",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_C_Add33",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_C_Add33.prefab",
+            "guid": "3c4ad9819585aae4c8142a8514f6fd71",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_C_Add34",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_C_Add34.prefab",
+            "guid": "32b66b7d7c58ed449894732dada0c6a8",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_Smile_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_Smile_A.prefab",
+            "guid": "d7cdc89dca66f5a4798754c99cf2b2f1",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_Smile_B",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_Smile_B.prefab",
+            "guid": "a5e5abbba8fe6aa488b0dd38d095d048",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_Works_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Sit_Works_A.prefab",
+            "guid": "3d19e033677d07d43a15950e78471ea6",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Stand_Talk",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab",
+            "guid": "f579a814879c8da469b3cf2d178c4206",
+            "isRuntimePrefab": true
+        },
+        {
+            "name": "Edumeta_CharacterGirl_AAA_Sit_C_Add33",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_AAA_Sit_C_Add33.prefab",
+            "guid": "617183f9918f095419412cdfb1eaae37",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_BBB_Sit_A (1)",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_BBB_Sit_A (1).prefab",
+            "guid": "7cf0ed7e4c7d1784397d404f4f9aaed4",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_BBB_Sit_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_BBB_Sit_A.prefab",
+            "guid": "6d37cb260fc3b70449230f839fd3f6a1",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_BBB_Sit_C",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_BBB_Sit_C.prefab",
+            "guid": "6205a8510a85ca44e8146d807a96d6c8",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_BBB_Sit_Smile_B",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_BBB_Sit_Smile_B.prefab",
+            "guid": "685edad0486db894e8259fc884803e40",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_BBB_Sit_Works_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_BBB_Sit_Works_A.prefab",
+            "guid": "8ac67b132045d244ba9808453e3187f7",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterGirl_CCC_Sit_C",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterGirl_CCC_Sit_C.prefab",
+            "guid": "2939df988c639e0478079122e9a2e613",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterMan_AAA_Stand_Talk",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterMan_AAA_Stand_Talk.prefab",
+            "guid": "b2a5097987693f04587a6049a4f876c5",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterMan_BBB_Sit_C_Add3",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterMan_BBB_Sit_C_Add3.prefab",
+            "guid": "9c1e977210aeab444b83433bc582d864",
+            "isRuntimePrefab": false
+        },
+        {
+            "name": "Edumeta_CharacterMan_BBB_Sit_Works_A",
+            "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/SittingPrefabs/Edumeta_CharacterMan_BBB_Sit_Works_A.prefab",
+            "guid": "9495f7aa25fb8ab4aa8b25519afc9af5",
+            "isRuntimePrefab": false
+        }
+    ],
+    "prefabRenderers": [
+        {
+            "gameObjectName": "CC_Base_Body",
+            "hierarchyPath": "CC_Base_Body",
+            "category": "head_body",
+            "meshName": "CC_Base_Body",
+            "subMeshCount": 6,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Skin_Head_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Skin_Head_Diffuse.mat",
+                    "materialGuid": "e3913db13179842ed8dbf1e3d9c4e8f3",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Skin_Head_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Skin_Head_Diffuse.png",
+                            "guid": "296b0c9a011db974281fd648169d2b6b",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Skin_Body_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Skin_Body_Diffuse.mat",
+                    "materialGuid": "29ea75fde7eee4c078ecea4f5291336b",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Skin_Body_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Skin_Body_Diffuse.png",
+                            "guid": "b0320739ab0819c4d840c1237f5f9d8a",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 2,
+                    "materialName": "Std_Skin_Arm_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Skin_Arm_Diffuse.mat",
+                    "materialGuid": "7a07dff80eb0942b488d7b4ffce23de0",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Skin_Arm_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Skin_Arm_Diffuse.png",
+                            "guid": "0811b30a235e85c45ac17ea8a6b99866",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 3,
+                    "materialName": "Std_Skin_Leg_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Skin_Leg_Diffuse.mat",
+                    "materialGuid": "a61182c261c1846819ac62dca774e59d",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Skin_Leg_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Skin_Leg_Diffuse.png",
+                            "guid": "824c29c237deb4d42bc82bdba5302f23",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 4,
+                    "materialName": "Std_Nails_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Nails_Diffuse.mat",
+                    "materialGuid": "b19ff288a18184614bb0a505a6fa0998",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Nails_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Nails_Diffuse.png",
+                            "guid": "e531651eebe328249b6ce2a66e3230dd",
+                            "fileExists": true,
+                            "sRGBTexture": false,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 5,
+                    "materialName": "Std_Eyelash_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eyelash_Diffuse.mat",
+                    "materialGuid": "e13b39d2cba714dd39c28ba1d23670e2",
+                    "shaderName": "Standard",
+                    "renderMode": "Cutout",
+                    "renderQueue": 2450,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Eyelash_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eyelash_Diffuse.png",
+                            "guid": "e33dde58ba6e5f546922a98ed6736f89",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "CC_Base_Eye",
+            "hierarchyPath": "CC_Base_Eye",
+            "category": "eye_base",
+            "meshName": "CC_Base_Eye",
+            "subMeshCount": 4,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_R_Diffuse.mat",
+                    "materialGuid": "86b8a105c288a4198bbe08bc9ca68b0a",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Eye_R_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_R_Diffuse.png",
+                            "guid": "28614588b221ccc4aac0288a0f7cb232",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Cornea_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Cornea_R_Diffuse.mat",
+                    "materialGuid": "28a23438fbeaf4fc59ae727fcbbd63f8",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Cornea_R_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_R_Diffuse.png",
+                            "guid": "9fb5bf5a2fea7854581f4a691c36845d",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 2,
+                    "materialName": "Std_Eye_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_L_Diffuse.mat",
+                    "materialGuid": "3a21fe751309b4368b21b3fdc7405c07",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Eye_L_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_L_Diffuse.png",
+                            "guid": "c7445edb9f827a94ab1a4a4328adb24f",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 3,
+                    "materialName": "Std_Cornea_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Cornea_L_Diffuse.mat",
+                    "materialGuid": "667fa81e6e56345a9b393e6108303541",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Cornea_L_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_L_Diffuse.png",
+                            "guid": "a0d13f0868c5e8243aad44e24dbe483c",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "CC_Base_EyeOcclusion",
+            "hierarchyPath": "CC_Base_EyeOcclusion",
+            "category": "overlay",
+            "meshName": "CC_Base_EyeOcclusion",
+            "subMeshCount": 2,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_Occlusion_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_Occlusion_R_Diffuse.mat",
+                    "materialGuid": "6ac1b7d067ee94855ab72f90d32709d9",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Eye_Occlusion_R_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_R_Diffuse.png",
+                            "guid": "4c105b80191518f438e0540a42db5756",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "SOLID_WHITE (may indicate missing texture data)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Eye_Occlusion_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_Occlusion_L_Diffuse.mat",
+                    "materialGuid": "bb01957ac7d5c49aab862bea527dc3a9",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Eye_Occlusion_L_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_L_Diffuse.png",
+                            "guid": "bacd5cb12a191f742aa3dc991ac338fd",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "SOLID_WHITE (may indicate missing texture data)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "CC_Base_TearLine",
+            "hierarchyPath": "CC_Base_TearLine",
+            "category": "overlay",
+            "meshName": "CC_Base_TearLine",
+            "subMeshCount": 2,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Tearline_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Tearline_R_Diffuse.mat",
+                    "materialGuid": "54a798ea724234282810eb2039fd0595",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Tearline_R_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_R_Diffuse.png",
+                            "guid": "4b82a05c71e85da448e2df342885c096",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "SOLID_WHITE (may indicate missing texture data)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Tearline_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Tearline_L_Diffuse.mat",
+                    "materialGuid": "c4bba8584e67c4d4991cd9f067bd8572",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Std_Tearline_L_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_L_Diffuse.png",
+                            "guid": "160a18ada9c44494b9a6f9244b9657e2",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "SOLID_WHITE (may indicate missing texture data)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "Curly_long_hair",
+            "hierarchyPath": "Curly_long_hair",
+            "category": "hair",
+            "meshName": "Curly_long_hair",
+            "subMeshCount": 1,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Hair_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Hair_Transparency_Diffuse.mat",
+                    "materialGuid": "850451856c0b6437b86debab1c0547c0",
+                    "shaderName": "Standard",
+                    "renderMode": "Cutout",
+                    "renderQueue": 2450,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Hair_Transparency_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Hair_Transparency_Diffuse.png",
+                            "guid": "6ea71a98c585f4345ac378be62a62688",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "Hair_Base",
+            "hierarchyPath": "Hair_Base",
+            "category": "hair",
+            "meshName": "Hair_Base",
+            "subMeshCount": 2,
+            "hasInstanceMaterials": false,
+            "hasPrefabOverrides": false,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Hair_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Hair_Transparency_Diffuse.mat",
+                    "materialGuid": "850451856c0b6437b86debab1c0547c0",
+                    "shaderName": "Standard",
+                    "renderMode": "Cutout",
+                    "renderQueue": 2450,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Hair_Transparency_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Hair_Transparency_Diffuse.png",
+                            "guid": "6ea71a98c585f4345ac378be62a62688",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Scalp_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Scalp_Transparency_Diffuse.mat",
+                    "materialGuid": "fa26f1e5736ce4a50bf93274117cbc19",
+                    "shaderName": "Standard",
+                    "renderMode": "Cutout",
+                    "renderQueue": 2450,
+                    "textures": [
+                        {
+                            "propertyName": "_MainTex",
+                            "textureName": "Scalp_Transparency_Diffuse",
+                            "assetPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Scalp_Transparency_Diffuse.png",
+                            "guid": "4847986d6b8ddf7438643eb7880ebd9c",
+                            "fileExists": true,
+                            "sRGBTexture": true,
+                            "alphaSource": "FromInput",
+                            "alphaIsTransparency": true,
+                            "isReadable": false,
+                            "mipmapsEnabled": true,
+                            "compression": "Compressed",
+                            "sanityCheck": "NO_ALPHA (all pixels fully opaque)",
+                            "alphaMinValue": 1.0,
+                            "alphaMaxValue": 1.0,
+                            "alphaCoverage": 0.0
+                        },
+                        {
+                            "propertyName": "_BaseMap",
+                            "textureName": "N/A (no property)",
+                            "assetPath": "",
+                            "guid": "",
+                            "fileExists": false,
+                            "sRGBTexture": false,
+                            "alphaSource": "",
+                            "alphaIsTransparency": false,
+                            "isReadable": false,
+                            "mipmapsEnabled": false,
+                            "compression": "",
+                            "sanityCheck": "",
+                            "alphaMinValue": 0.0,
+                            "alphaMaxValue": 0.0,
+                            "alphaCoverage": 0.0
+                        }
+                    ],
+                    "issues": []
+                }
+            ]
+        }
+    ],
+    "sceneRenderers": [],
+    "runtimeModifiers": [
+        {
+            "filePath": "Assets/Scripts/CharacterTextureVerifier.cs",
+            "lineNumber": 81,
+            "matchedCode": "Texture mainTex = mat.HasProperty(\"_MainTex\") ? mat.GetTexture(\"_MainTex\") : null;"
+        },
+        {
+            "filePath": "Assets/Scripts/CharacterTextureVerifier.cs",
+            "lineNumber": 111,
+            "matchedCode": "Debug.LogError($\"[Verify] MISSING: {missingCount} materials without _MainTex\");"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 105,
+            "matchedCode": "bool hasMissingMainTex = mat.HasProperty(\"_MainTex\") &&"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 106,
+            "matchedCode": "mat.GetTexture(\"_MainTex\") == null;"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 114,
+            "matchedCode": "string issue = isDefaultMaterial ? \"DEFAULT-MATERIAL\" : \"MISSING _MainTex\";"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 121,
+            "matchedCode": "// Try to find texture from _BaseMap (URP property)"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 122,
+            "matchedCode": "if (mat.HasProperty(\"_BaseMap\"))"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 124,
+            "matchedCode": "Texture tex = mat.GetTexture(\"_BaseMap\");"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 127,
+            "matchedCode": "mat.SetTexture(\"_MainTex\", tex);"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 130,
+            "matchedCode": "Debug.Log($\"[RuntimeGuard] Fixed {mat.name}: copied _BaseMap to _MainTex\");"
+        },
+        {
+            "filePath": "Assets/Scripts/RuntimeMaterialRepairGuard.cs",
+            "lineNumber": 156,
+            "matchedCode": "renderer.materials = mats;"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 47,
+            "matchedCode": "FixInstanceMaterials(existingChar.gameObject);"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 71,
+            "matchedCode": "FixInstanceMaterials(character);"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 95,
+            "matchedCode": "public static void FixInstanceMaterials(GameObject character)"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 130,
+            "matchedCode": "if (mat.HasProperty(\"_MainTex\")) mainTex = mat.GetTexture(\"_MainTex\");"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 131,
+            "matchedCode": "if (mainTex == null && mat.HasProperty(\"_BaseMap\")) mainTex = mat.GetTexture(\"_BaseMap\");"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 148,
+            "matchedCode": "if (mainTex != null) mat.SetTexture(\"_MainTex\", mainTex);"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 149,
+            "matchedCode": "if (normalMap != null) mat.SetTexture(\"_BumpMap\", normalMap);"
+        },
+        {
+            "filePath": "Assets/Scripts/SceneCharacterInitializer.cs",
+            "lineNumber": 181,
+            "matchedCode": "renderer.materials = mats;"
+        }
+    ],
+    "criticalIssues": [],
+    "warnings": [
+        "No Avatar/CharacterModel found in scene"
+    ],
+    "rootCauseAnalysis": "=== ROOT CAUSE ANALYSIS ===\n\nEYE BASE ANALYSIS (CC_Base_Eye):\n  Slot 0 (Std_Eye_R_Diffuse):\n    Texture: Std_Eye_R_Diffuse\n    Exists: True\n    Sanity: NO_ALPHA (all pixels fully opaque)\n    Mode: Opaque\n  Slot 1 (Std_Cornea_R_Diffuse):\n    Texture: Std_Cornea_R_Diffuse\n    Exists: True\n    Sanity: NO_ALPHA (all pixels fully opaque)\n    Mode: Fade\n  Slot 2 (Std_Eye_L_Diffuse):\n    Texture: Std_Eye_L_Diffuse\n    Exists: True\n    Sanity: NO_ALPHA (all pixels fully opaque)\n    Mode: Opaque\n  Slot 3 (Std_Cornea_L_Diffuse):\n    Texture: Std_Cornea_L_Diffuse\n    Exists: True\n    Sanity: NO_ALPHA (all pixels fully opaque)\n    Mode: Fade\n\nRUNTIME MODIFIERS DETECTED (19 locations):\n  Assets/Scripts/CharacterTextureVerifier.cs:81\n  Assets/Scripts/CharacterTextureVerifier.cs:111\n  Assets/Scripts/RuntimeMaterialRepairGuard.cs:105\n  Assets/Scripts/RuntimeMaterialRepairGuard.cs:106\n  Assets/Scripts/RuntimeMaterialRepairGuard.cs:114\n"
+}
