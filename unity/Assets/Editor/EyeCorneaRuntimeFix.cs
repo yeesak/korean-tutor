@@ -14,9 +14,9 @@ namespace ShadowingTutor.Editor
     {
         private const string GENERATED_PATH = "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Generated/Eyes";
         private const string TRANSPARENT_TEX_PATH = "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Generated/Eyes/Transparent_1x1.png";
-        private const string REPORT_PATH = "Assets/Temp/eye_cornea_fix_report.txt";
+        private const string REPORT_PATH = "Assets/Temp/cornea_fix_report.txt";
 
-        [MenuItem("Tools/Eye Doctor/1) Fix Cornea MainTex + Transparency")]
+        [MenuItem("Tools/Eye Doctor/Cornea Safety Fix")]
         public static void FixCorneaMainTexAndTransparency()
         {
             Debug.Log("=== EYE CORNEA RUNTIME FIX ===\n");
