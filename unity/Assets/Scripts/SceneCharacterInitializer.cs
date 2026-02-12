@@ -161,6 +161,9 @@ namespace ShadowingTutor
                             mat.SetInt("_ZWrite", 0);
                             mat.EnableKeyword("_ALPHABLEND_ON");
                             mat.renderQueue = 3000;
+                            // Ensure low alpha for transparency
+                            color.a = 0.1f;
+                            mat.SetColor("_Color", color);
                         }
                         else if (matName.Contains("transparency") || matName.Contains("hair") || matName.Contains("eyelash"))
                         {
@@ -174,6 +177,15 @@ namespace ShadowingTutor
                         changed = true;
                         fixedCount++;
                     }
+
+                    // Always ensure cornea materials have proper transparency settings
+                    // (even if shader didn't need fixing)
+                    string matNameCheck = mat.name.ToLower();
+                    if (matNameCheck.Contains("cornea"))
+                    {
+                        EnsureCorneaTransparency(mat);
+                        changed = true;
+                    }
                 }
 
                 if (changed)
@@ -186,6 +198,36 @@ namespace ShadowingTutor
             {
                 Debug.Log($"[SceneInit] Fixed {fixedCount} instance materials at runtime");
             }
+        }
+
+        /// <summary>
+        /// Ensures cornea materials are properly transparent so iris/pupil is visible.
+        /// </summary>
+        private static void EnsureCorneaTransparency(Material mat)
+        {
+            if (mat == null) return;
+
+            // Set Fade mode
+            mat.SetFloat("_Mode", 2);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = 3000;
+
+            // Ensure low alpha (0.1 = 90% transparent)
+            Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
+            if (color.a > 0.2f)
+            {
+                color.a = 0.1f;
+                mat.SetColor("_Color", color);
+            }
+
+            // Set high glossiness for wet eye look
+            mat.SetFloat("_Glossiness", 0.9f);
+            mat.SetFloat("_Metallic", 0f);
         }
 
         private static void DisablePlaceholders(GameObject avatar)
