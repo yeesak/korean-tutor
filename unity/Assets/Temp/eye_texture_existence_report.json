@@ -1,0 +1,251 @@
+{
+    "timestamp": "2026-02-12 18:36:49",
+    "characterPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab",
+    "mode": "EditMode",
+    "eyeRenderers": [
+        {
+            "path": "CC_Base_Eye",
+            "category": "EYE_BASE",
+            "slots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Eye_R_Diffuse.mat",
+                    "materialGuid": "bd00f076f86ad4aae8c2ce29041d8570",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "mainTexName": "Std_Eye_R_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_R_Diffuse.png",
+                    "mainTexGuid": "28614588b221ccc4aac0288a0f7cb232",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_R_Diffuse.png",
+                        "guid": "28614588b221ccc4aac0288a0f7cb232",
+                        "fileSizeBytes": 3533673,
+                        "width": 2048,
+                        "height": 2048,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 0.0,
+                        "maxBrightness": 0.8156862854957581,
+                        "meanBrightness": 0.6257206797599793,
+                        "variance": 0.017361119389533998,
+                        "percentNearWhite": 0.0,
+                        "percentDark": 4.384970664978027,
+                        "hasPupilIris": true,
+                        "analysisDetails": "Dark:True, Variance:True, Contrast:True -> Contains pupil/iris"
+                    }
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Cornea_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Cornea_R_Diffuse.mat",
+                    "materialGuid": "0bcb34cf2811a414ba911ea6286b77c6",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Cornea_R_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_R_Diffuse.png",
+                    "mainTexGuid": "9fb5bf5a2fea7854581f4a691c36845d",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_R_Diffuse.png",
+                        "guid": "9fb5bf5a2fea7854581f4a691c36845d",
+                        "fileSizeBytes": 3533673,
+                        "width": 2048,
+                        "height": 2048,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 0.0,
+                        "maxBrightness": 0.8156862854957581,
+                        "meanBrightness": 0.6257206797599793,
+                        "variance": 0.017361119389533998,
+                        "percentNearWhite": 0.0,
+                        "percentDark": 4.384970664978027,
+                        "hasPupilIris": true,
+                        "analysisDetails": "Dark:True, Variance:True, Contrast:True -> Contains pupil/iris"
+                    }
+                },
+                {
+                    "slotIndex": 2,
+                    "materialName": "Std_Eye_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Eye_L_Diffuse.mat",
+                    "materialGuid": "361c3a942316e4727afb9b60016ecd6f",
+                    "shaderName": "Standard",
+                    "renderMode": "Opaque",
+                    "renderQueue": 2000,
+                    "mainTexName": "Std_Eye_L_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_L_Diffuse.png",
+                    "mainTexGuid": "c7445edb9f827a94ab1a4a4328adb24f",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_L_Diffuse.png",
+                        "guid": "c7445edb9f827a94ab1a4a4328adb24f",
+                        "fileSizeBytes": 3533673,
+                        "width": 2048,
+                        "height": 2048,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 0.0,
+                        "maxBrightness": 0.8156862854957581,
+                        "meanBrightness": 0.6257206797599793,
+                        "variance": 0.017361119389533998,
+                        "percentNearWhite": 0.0,
+                        "percentDark": 4.384970664978027,
+                        "hasPupilIris": true,
+                        "analysisDetails": "Dark:True, Variance:True, Contrast:True -> Contains pupil/iris"
+                    }
+                },
+                {
+                    "slotIndex": 3,
+                    "materialName": "Std_Cornea_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Cornea_L_Diffuse.mat",
+                    "materialGuid": "37cc89c25d9de4ede8ea7a1636a91c1a",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Cornea_L_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_L_Diffuse.png",
+                    "mainTexGuid": "a0d13f0868c5e8243aad44e24dbe483c",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_L_Diffuse.png",
+                        "guid": "a0d13f0868c5e8243aad44e24dbe483c",
+                        "fileSizeBytes": 3533673,
+                        "width": 2048,
+                        "height": 2048,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 0.0,
+                        "maxBrightness": 0.8156862854957581,
+                        "meanBrightness": 0.6257206797599793,
+                        "variance": 0.017361119389533998,
+                        "percentNearWhite": 0.0,
+                        "percentDark": 4.384970664978027,
+                        "hasPupilIris": true,
+                        "analysisDetails": "Dark:True, Variance:True, Contrast:True -> Contains pupil/iris"
+                    }
+                }
+            ]
+        },
+        {
+            "path": "CC_Base_EyeOcclusion",
+            "category": "EYE_OCCLUSION",
+            "slots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_Occlusion_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Eye_Occlusion_R_Diffuse.mat",
+                    "materialGuid": "9474e710b0df64f75be5a9fca5b916da",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Eye_Occlusion_R_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_R_Diffuse.png",
+                    "mainTexGuid": "4c105b80191518f438e0540a42db5756",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_R_Diffuse.png",
+                        "guid": "4c105b80191518f438e0540a42db5756",
+                        "fileSizeBytes": 184,
+                        "width": 64,
+                        "height": 64,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 1.0,
+                        "maxBrightness": 1.0,
+                        "meanBrightness": 1.0,
+                        "variance": 0.0,
+                        "percentNearWhite": 100.0,
+                        "percentDark": 0.0,
+                        "hasPupilIris": false,
+                        "analysisDetails": "Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast"
+                    }
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Eye_Occlusion_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Eye_Occlusion_L_Diffuse.mat",
+                    "materialGuid": "9b9b9ad749d2745f29f6182ccf9e90b7",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Eye_Occlusion_L_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_L_Diffuse.png",
+                    "mainTexGuid": "bacd5cb12a191f742aa3dc991ac338fd",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_L_Diffuse.png",
+                        "guid": "bacd5cb12a191f742aa3dc991ac338fd",
+                        "fileSizeBytes": 184,
+                        "width": 64,
+                        "height": 64,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 1.0,
+                        "maxBrightness": 1.0,
+                        "meanBrightness": 1.0,
+                        "variance": 0.0,
+                        "percentNearWhite": 100.0,
+                        "percentDark": 0.0,
+                        "hasPupilIris": false,
+                        "analysisDetails": "Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast"
+                    }
+                }
+            ]
+        },
+        {
+            "path": "CC_Base_TearLine",
+            "category": "TEARLINE",
+            "slots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Tearline_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Tearline_R_Diffuse.mat",
+                    "materialGuid": "7b652076aab5a41ddab3307620e99832",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Tearline_R_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_R_Diffuse.png",
+                    "mainTexGuid": "4b82a05c71e85da448e2df342885c096",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_R_Diffuse.png",
+                        "guid": "4b82a05c71e85da448e2df342885c096",
+                        "fileSizeBytes": 184,
+                        "width": 64,
+                        "height": 64,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 1.0,
+                        "maxBrightness": 1.0,
+                        "meanBrightness": 1.0,
+                        "variance": 0.0,
+                        "percentNearWhite": 100.0,
+                        "percentDark": 0.0,
+                        "hasPupilIris": false,
+                        "analysisDetails": "Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast"
+                    }
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Tearline_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Clean/Std_Tearline_L_Diffuse.mat",
+                    "materialGuid": "a8faa8cc536b64c068d67906ae9c32a0",
+                    "shaderName": "Standard",
+                    "renderMode": "Fade",
+                    "renderQueue": 3000,
+                    "mainTexName": "Std_Tearline_L_Diffuse",
+                    "mainTexPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_L_Diffuse.png",
+                    "mainTexGuid": "160a18ada9c44494b9a6f9244b9657e2",
+                    "mainTexAnalysis": {
+                        "path": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_L_Diffuse.png",
+                        "guid": "160a18ada9c44494b9a6f9244b9657e2",
+                        "fileSizeBytes": 184,
+                        "width": 64,
+                        "height": 64,
+                        "format": "ETC_RGB4",
+                        "minBrightness": 1.0,
+                        "maxBrightness": 1.0,
+                        "meanBrightness": 1.0,
+                        "variance": 0.0,
+                        "percentNearWhite": 100.0,
+                        "percentDark": 0.0,
+                        "hasPupilIris": false,
+                        "analysisDetails": "Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast"
+                    }
+                }
+            ]
+        }
+    ],
+    "overallConclusion": "Eye textures appear to contain pupil/iris data",
+    "recommendedAction": "Check runtime material/shader conversion or overlay rendering order"
+}

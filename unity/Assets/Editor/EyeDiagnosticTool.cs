@@ -10,7 +10,7 @@ namespace ShadowingTutor.Editor
     /// </summary>
     public class EyeDiagnosticTool
     {
-        [MenuItem("Tools/Eye Diagnostic/Check Eye Materials NOW")]
+        [MenuItem("Tools/Eye Doctor/Check Eye Materials NOW")]
         public static void CheckEyeMaterials()
         {
             var sb = new StringBuilder();
@@ -150,7 +150,7 @@ namespace ShadowingTutor.Editor
             Debug.Log($"Report saved to: {dir}/eye_diagnostic.txt");
         }
 
-        [MenuItem("Tools/Eye Diagnostic/Force Refresh Prefab Materials")]
+        [MenuItem("Tools/Eye Doctor/Force Refresh Prefab Materials")]
         public static void ForceRefreshPrefab()
         {
             string prefabPath = "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab";
@@ -201,7 +201,7 @@ namespace ShadowingTutor.Editor
             Debug.Log($"Refreshed {refreshed} material references in prefab");
         }
 
-        [MenuItem("Tools/Eye Diagnostic/Reimport All Eye Textures")]
+        [MenuItem("Tools/Eye Doctor/Reimport All Eye Textures")]
         public static void ReimportEyeTextures()
         {
             string[] paths = {

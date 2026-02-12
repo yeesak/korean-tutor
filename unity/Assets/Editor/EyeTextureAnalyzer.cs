@@ -70,7 +70,7 @@ namespace ShadowingTutor.Editor
             public string recommendedAction;
         }
 
-        [MenuItem("Tools/Eye Analysis/Analyze Eye Textures (Generate Report)")]
+        [MenuItem("Tools/Eye Doctor/Analyze Eye Textures (Generate Report)")]
         public static void AnalyzeEyeTextures()
         {
             Debug.Log("=== EYE TEXTURE ANALYSIS ===\n");

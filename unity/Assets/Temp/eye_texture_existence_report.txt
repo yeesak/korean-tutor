@@ -1,0 +1,99 @@
+=== EYE TEXTURE EXISTENCE REPORT ===
+Timestamp: 2026-02-12 18:36:49
+Character: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab
+Mode: EditMode
+
+--- CC_Base_Eye (EYE_BASE) ---
+  [0] Std_Eye_R_Diffuse
+      Shader: Standard
+      Mode: Opaque, Queue: 2000
+      _MainTex: Std_Eye_R_Diffuse (2048x2048)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_R_Diffuse.png
+      GUID: 28614588b221ccc4aac0288a0f7cb232
+      Analysis: min=0.000, max=0.816, mean=0.626
+      %NearWhite: 0.0%, %Dark: 4.4%
+      CONTAINS PUPIL/IRIS: YES
+      Details: Dark:True, Variance:True, Contrast:True -> Contains pupil/iris
+
+  [1] Std_Cornea_R_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Cornea_R_Diffuse (2048x2048)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_R_Diffuse.png
+      GUID: 9fb5bf5a2fea7854581f4a691c36845d
+      Analysis: min=0.000, max=0.816, mean=0.626
+      %NearWhite: 0.0%, %Dark: 4.4%
+      CONTAINS PUPIL/IRIS: YES
+      Details: Dark:True, Variance:True, Contrast:True -> Contains pupil/iris
+
+  [2] Std_Eye_L_Diffuse
+      Shader: Standard
+      Mode: Opaque, Queue: 2000
+      _MainTex: Std_Eye_L_Diffuse (2048x2048)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_L_Diffuse.png
+      GUID: c7445edb9f827a94ab1a4a4328adb24f
+      Analysis: min=0.000, max=0.816, mean=0.626
+      %NearWhite: 0.0%, %Dark: 4.4%
+      CONTAINS PUPIL/IRIS: YES
+      Details: Dark:True, Variance:True, Contrast:True -> Contains pupil/iris
+
+  [3] Std_Cornea_L_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Cornea_L_Diffuse (2048x2048)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Cornea_L_Diffuse.png
+      GUID: a0d13f0868c5e8243aad44e24dbe483c
+      Analysis: min=0.000, max=0.816, mean=0.626
+      %NearWhite: 0.0%, %Dark: 4.4%
+      CONTAINS PUPIL/IRIS: YES
+      Details: Dark:True, Variance:True, Contrast:True -> Contains pupil/iris
+
+--- CC_Base_EyeOcclusion (EYE_OCCLUSION) ---
+  [0] Std_Eye_Occlusion_R_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Eye_Occlusion_R_Diffuse (64x64)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_R_Diffuse.png
+      GUID: 4c105b80191518f438e0540a42db5756
+      Analysis: min=1.000, max=1.000, mean=1.000
+      %NearWhite: 100.0%, %Dark: 0.0%
+      CONTAINS PUPIL/IRIS: NO
+      Details: Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast
+
+  [1] Std_Eye_Occlusion_L_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Eye_Occlusion_L_Diffuse (64x64)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Eye_Occlusion_L_Diffuse.png
+      GUID: bacd5cb12a191f742aa3dc991ac338fd
+      Analysis: min=1.000, max=1.000, mean=1.000
+      %NearWhite: 100.0%, %Dark: 0.0%
+      CONTAINS PUPIL/IRIS: NO
+      Details: Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast
+
+--- CC_Base_TearLine (TEARLINE) ---
+  [0] Std_Tearline_R_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Tearline_R_Diffuse (64x64)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_R_Diffuse.png
+      GUID: 4b82a05c71e85da448e2df342885c096
+      Analysis: min=1.000, max=1.000, mean=1.000
+      %NearWhite: 100.0%, %Dark: 0.0%
+      CONTAINS PUPIL/IRIS: NO
+      Details: Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast
+
+  [1] Std_Tearline_L_Diffuse
+      Shader: Standard
+      Mode: Fade, Queue: 3000
+      _MainTex: Std_Tearline_L_Diffuse (64x64)
+      TexPath: Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Edumeta_CharacterGirl_AAA 1.fbm/Std_Tearline_L_Diffuse.png
+      GUID: 160a18ada9c44494b9a6f9244b9657e2
+      Analysis: min=1.000, max=1.000, mean=1.000
+      %NearWhite: 100.0%, %Dark: 0.0%
+      CONTAINS PUPIL/IRIS: NO
+      Details: Dark:False, Variance:False, Contrast:False -> Missing dark (pupil) regions -> Too uniform -> Low contrast
+
+=== CONCLUSION ===
+Eye textures appear to contain pupil/iris data
+Check runtime material/shader conversion or overlay rendering order

@@ -64,7 +64,7 @@ namespace ShadowingTutor.Editor
 
         #region Menu Items
 
-        [MenuItem("Tools/Character Setup/REPORT: Active Runtime Materials (Play Mode)")]
+        [MenuItem("Tools/Character Setup/REPORT: Runtime Materials V2 (Play Mode)")]
         public static void ReportRuntimeMaterials()
         {
             var report = GenerateRuntimeReport();
@@ -72,7 +72,7 @@ namespace ShadowingTutor.Editor
             PrintRuntimeReport(report);
         }
 
-        [MenuItem("Tools/Character Setup/DIAGNOSTIC: Head+Eye+Brow+Hair")]
+        [MenuItem("Tools/Character Setup/DIAGNOSTIC V2: Head+Eye+Brow+Hair")]
         public static void RunDiagnostic()
         {
             Debug.Log("=== CHARACTER RENDERING DIAGNOSTIC ===\n");
@@ -91,7 +91,7 @@ namespace ShadowingTutor.Editor
             Debug.Log("\n=== END DIAGNOSTIC ===");
         }
 
-        [MenuItem("Tools/Character Setup/FIX: Head+Eye+Brow+Hair (Complete - Fresh Materials)")]
+        [MenuItem("Tools/Character Setup/FIX V2: Head+Eye+Brow+Hair (Fresh Materials)")]
         public static void RunCompleteFix()
         {
             Debug.Log("=== CHARACTER RENDERING COMPLETE FIX ===\n");
