@@ -158,9 +158,23 @@ namespace ShadowingTutor
         private const string PREFS_REMAINING = "SeasonProgress_Remaining";
         private const string PREFS_EXPRESSION_INDEX = "SeasonProgress_ExpressionIndex";
 
-        // YES/NO intent keywords
-        private static readonly string[] YesKeywords = { "네", "예", "응", "좋아", "해", "할래", "하고싶", "싶어", "공부", "다음", "계속" };
-        private static readonly string[] NoKeywords = { "아니", "싫어", "안해", "안 해", "그만", "끝", "됐어", "멈춰", "스톱" };
+        // YES/NO intent keywords (extended for voice-driven continuation)
+        private static readonly string[] YesKeywords = {
+            "네", "예", "응", "그래", "좋아", "가자", "넘어가", "계속", "진행", "해", "오케이", "ok",
+            "할래", "하고싶", "싶어", "공부", "다음", "해줘", "해 줘", "고고", "ㅇㅇ"
+        };
+        private static readonly string[] NoKeywords = {
+            "아니", "아니요", "싫어", "그만", "끝", "종료", "멈춰", "오늘은 여기까지", "피곤해", "하기 싫어",
+            "stop", "quit", "안해", "안 해", "됐어", "스톱", "쉬고싶", "쉬고 싶", "그만할래"
+        };
+
+        // Voice decision result enum
+        public enum VoiceDecision { Positive, Negative, Unknown }
+
+        // Voice-driven continuation state
+        private bool _voiceDecisionInProgress = false;
+        private int _voiceDecisionRepromptCount = 0;
+        private const int MAX_VOICE_REPROMPTS = 1;
 
         // Session versioning for safe cancellation
         // Incremented on every ResetSessionToHome() call
@@ -327,26 +341,50 @@ namespace ShadowingTutor
             string configError;
             if (!AppConfig.Instance.ValidateConfiguration(out configError))
             {
-                Debug.LogError($"[TutorRoom] Configuration invalid: {configError}");
+                string env = AppConfig.Instance.CurrentEnvironment.ToString();
+                string url = AppConfig.Instance.BackendBaseUrl;
 
-                // Show blocking error on UI
+                Debug.LogError($"[TutorRoom] Configuration invalid: {configError}\n  Environment: {env}\n  URL: {url}");
+
+                // Log to diagnostics
+                try
+                {
+                    Diagnostics.FileLogger.Log($"CONFIG ERROR: {configError} | Env={env} | URL={url}");
+                    Diagnostics.DebugOverlay.RecordError($"Config: {configError}");
+                }
+                catch { /* Diagnostics may not be ready */ }
+
+                // Show detailed error on UI (include env/URL in debug builds)
                 if (_hintText != null)
                 {
-                    _hintText.text = configError;
+                    _hintText.gameObject.SetActive(true);
+                    #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    _hintText.text = $"{configError}\n\n[Debug] Env: {env}\nURL: {url}\n\n탭하여 재시도";
+                    #else
+                    _hintText.text = $"{configError}\n\n탭하여 재시도";
+                    #endif
                     _hintText.color = Color.red;
                 }
                 if (_statusText != null)
                 {
+                    _statusText.gameObject.SetActive(true);
                     _statusText.text = "설정 오류";
                 }
 
-                // Disable main button to prevent lesson start
+                // Keep button enabled for retry (don't leave user stuck)
                 if (_mainButton != null)
                 {
-                    _mainButton.interactable = false;
+                    _mainButton.interactable = true;
+                }
+                if (_mainButtonText != null)
+                {
+                    _mainButtonText.text = "재시도";
                 }
 
-                yield break;  // Stop here - don't proceed
+                // Mark as not connected to trigger retry on button press
+                _isBackendConnected = false;
+
+                yield break;  // Stop here - don't proceed to health check
             }
 
             string baseUrl = AppConfig.Instance?.BackendBaseUrl ?? "not configured";
@@ -1135,6 +1173,9 @@ namespace ShadowingTutor
 
         private void OnMainButtonClick()
         {
+            // FIRST LOG - confirms onClick listener was invoked
+            UnityEngine.Debug.Log("[TutorRoom] *** BUTTON CLICKED *** OnMainButtonClick invoked!");
+
             // Debounce
             float now = Time.unscaledTime;
             if (now - _lastButtonPressTime < _buttonDebounceTime)
@@ -1173,15 +1214,41 @@ namespace ShadowingTutor
 
         /// <summary>
         /// Retry backend connection when user taps "재시도" button.
+        /// Also re-validates configuration in case it was the source of the error.
         /// </summary>
         private IEnumerator RetryConnectionCoroutine()
         {
             // Show loading state
             if (_mainButtonText != null) _mainButtonText.text = "연결 중...";
             if (_mainButton != null) _mainButton.interactable = false;
-            if (_hintText != null) _hintText.text = "서버에 연결하는 중...";
+            if (_hintText != null) _hintText.text = "설정 확인 중...";
 
             yield return new WaitForSeconds(0.3f);  // Brief delay for UI feedback
+
+            // Re-validate config first (in case user changed settings)
+            string configError;
+            if (!AppConfig.Instance.ValidateConfiguration(out configError))
+            {
+                string env = AppConfig.Instance.CurrentEnvironment.ToString();
+                string url = AppConfig.Instance.BackendBaseUrl;
+                Debug.LogError($"[TutorRoom] Retry - config still invalid: {configError}");
+
+                if (_hintText != null)
+                {
+                    #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    _hintText.text = $"{configError}\n\n[Debug] Env: {env}\nURL: {url}\n\n탭하여 재시도";
+                    #else
+                    _hintText.text = $"{configError}\n\n탭하여 재시도";
+                    #endif
+                    _hintText.color = Color.red;
+                }
+                if (_mainButtonText != null) _mainButtonText.text = "재시도";
+                if (_mainButton != null) _mainButton.interactable = true;
+                yield break;
+            }
+
+            // Config is valid, now check health
+            if (_hintText != null) _hintText.text = "서버에 연결하는 중...";
 
             bool isReachable = false;
             string healthError = null;
@@ -1780,6 +1847,14 @@ namespace ShadowingTutor
                                 // Season complete - break to season end handling
                                 break;
                             }
+
+                            // Voice-driven continuation: ask user if they want to continue
+                            // This gives user a natural exit point after each sentence
+                            yield return VoiceDrivenContinuation(6f);
+                            if (!IsSessionValid(mySessionVersion)) yield break;
+
+                            // If we reach here, user chose POSITIVE (continue)
+                            // The loop will naturally advance to next expression
                         }
                         else
                         {
@@ -1807,6 +1882,10 @@ namespace ShadowingTutor
                                 {
                                     break;
                                 }
+
+                                // Voice-driven continuation after skip
+                                yield return VoiceDrivenContinuation(6f);
+                                if (!IsSessionValid(mySessionVersion)) yield break;
                             }
                             else
                             {
@@ -3246,6 +3325,260 @@ namespace ShadowingTutor
 
             Debug.Log($"[TutorRoom] Intent unclear for: '{transcript}'");
             return 0;
+        }
+
+        /// <summary>
+        /// Classify transcript into VoiceDecision (Positive/Negative/Unknown).
+        /// More explicit than ParseYesNoIntent for voice-driven branching.
+        /// </summary>
+        private VoiceDecision ClassifyVoiceDecision(string transcript)
+        {
+            string cleanTranscript = TranscriptUtils.NormalizeTranscript(transcript);
+
+            if (string.IsNullOrEmpty(cleanTranscript))
+            {
+                Debug.Log("[VoiceDecision] Empty transcript -> Unknown");
+                return VoiceDecision.Unknown;
+            }
+
+            string lower = cleanTranscript.ToLower().Trim();
+
+            // Check for POSITIVE keywords
+            foreach (string keyword in YesKeywords)
+            {
+                if (lower.Contains(keyword.ToLower()))
+                {
+                    Debug.Log($"[VoiceDecision] POSITIVE detected: '{keyword}' in '{transcript}'");
+                    return VoiceDecision.Positive;
+                }
+            }
+
+            // Check for NEGATIVE keywords
+            foreach (string keyword in NoKeywords)
+            {
+                if (lower.Contains(keyword.ToLower()))
+                {
+                    Debug.Log($"[VoiceDecision] NEGATIVE detected: '{keyword}' in '{transcript}'");
+                    return VoiceDecision.Negative;
+                }
+            }
+
+            Debug.Log($"[VoiceDecision] UNKNOWN for: '{transcript}'");
+            return VoiceDecision.Unknown;
+        }
+
+        /// <summary>
+        /// Voice-driven continuation flow after sentence study completes.
+        /// Asks "다음으로 넘어가볼까요?" and processes user's spoken response.
+        /// </summary>
+        /// <param name="timeoutSeconds">Listening timeout (default 6s)</param>
+        /// <returns>True if user wants to continue, False if user wants to quit</returns>
+        private IEnumerator VoiceDrivenContinuation(float timeoutSeconds = 6f)
+        {
+            int mySessionVersion = _sessionVersion;
+            _voiceDecisionInProgress = true;
+            _voiceDecisionRepromptCount = 0;
+
+            Debug.Log("[VoiceDecision] Starting voice-driven continuation flow");
+
+            // Step 1: Play continuation prompt
+            string continuationPrompt = "다음으로 넘어가볼까요?";
+            Debug.Log($"[VoiceDecision] Speaking prompt: '{continuationPrompt}'");
+            yield return PlayTtsAndWait(continuationPrompt);
+
+            if (!IsSessionValid(mySessionVersion))
+            {
+                _voiceDecisionInProgress = false;
+                yield break;
+            }
+
+            // Step 2: Listen for response
+            VoiceDecision decision = VoiceDecision.Unknown;
+            bool decisionMade = false;
+
+            while (!decisionMade && IsSessionValid(mySessionVersion))
+            {
+                // Clear previous transcript
+                _transcriptText_value = "";
+
+                // Indicate listening state
+                if (_hintText != null) _hintText.text = "네 또는 아니요~";
+                SetState(TutorState.Recording);
+                Debug.Log("[VoiceDecision] Listening started...");
+
+                bool recordingStarted = MicRecorder.Instance?.StartRecording() ?? false;
+                if (!recordingStarted)
+                {
+                    Debug.LogWarning("[VoiceDecision] Failed to start recording -> treating as Unknown");
+                    decision = VoiceDecision.Unknown;
+                    break;
+                }
+
+                // Wait for recording with timeout
+                float elapsed = 0f;
+                while (_currentState == TutorState.Recording && elapsed < timeoutSeconds)
+                {
+                    yield return null;
+                    elapsed += Time.deltaTime;
+                }
+
+                if (elapsed >= timeoutSeconds)
+                {
+                    Debug.Log($"[VoiceDecision] Listening timeout after {elapsed:F1}s");
+                    MicRecorder.Instance?.StopRecordingGracefully();
+                }
+
+                // Wait for STT processing
+                float sttWait = 0f;
+                while (_currentState == TutorState.Scoring && sttWait < 5f)
+                {
+                    yield return null;
+                    sttWait += Time.deltaTime;
+                }
+
+                if (!IsSessionValid(mySessionVersion))
+                {
+                    _voiceDecisionInProgress = false;
+                    yield break;
+                }
+
+                // Step 3: Classify response
+                string transcript = _transcriptText_value;
+                Debug.Log($"[VoiceDecision] Transcript received: '{transcript}'");
+                decision = ClassifyVoiceDecision(transcript);
+
+                // Step 4: Handle decision
+                if (decision == VoiceDecision.Positive)
+                {
+                    Debug.Log("[VoiceDecision] VoiceDecision=POSITIVE -> continuing to next topic");
+                    decisionMade = true;
+                }
+                else if (decision == VoiceDecision.Negative)
+                {
+                    Debug.Log("[VoiceDecision] VoiceDecision=NEGATIVE -> initiating quit flow");
+                    decisionMade = true;
+                }
+                else // Unknown
+                {
+                    _voiceDecisionRepromptCount++;
+                    Debug.Log($"[VoiceDecision] VoiceDecision=UNKNOWN (reprompt #{_voiceDecisionRepromptCount})");
+
+                    if (_voiceDecisionRepromptCount <= MAX_VOICE_REPROMPTS)
+                    {
+                        // Reprompt once
+                        string reprompt = "네 또는 아니요로 말해 주세요.";
+                        Debug.Log($"[VoiceDecision] Reprompting: '{reprompt}'");
+                        yield return PlayTtsAndWait(reprompt);
+
+                        if (!IsSessionValid(mySessionVersion))
+                        {
+                            _voiceDecisionInProgress = false;
+                            yield break;
+                        }
+                        // Loop back to listen again
+                    }
+                    else
+                    {
+                        // Max reprompts exceeded -> default to NEGATIVE
+                        Debug.Log("[VoiceDecision] Max reprompts exceeded -> defaulting to NEGATIVE");
+                        decision = VoiceDecision.Negative;
+                        decisionMade = true;
+                    }
+                }
+            }
+
+            _voiceDecisionInProgress = false;
+
+            // Execute the decision
+            if (decision == VoiceDecision.Positive)
+            {
+                // Continue - the calling coroutine handles advancement
+                Debug.Log("[VoiceDecision] Flow complete -> CONTINUE");
+                SetState(TutorState.Feedback);
+            }
+            else // Negative (or defaulted to Negative after max reprompts)
+            {
+                // Return to Start screen (bypass season wrap-up)
+                Debug.Log("[VoiceDecision] Branching to Start screen (season wrap-up bypassed)");
+                yield return ReturnToStartScreen(mySessionVersion);
+            }
+        }
+
+        /// <summary>
+        /// Return to Start screen when user declines to continue.
+        /// Bypasses season wrap-up flow and resets to initial screen with START button.
+        /// </summary>
+        private IEnumerator ReturnToStartScreen(int sessionVersion)
+        {
+            Debug.Log("[VoiceDecision] NEGATIVE detected -> Returning to Start screen (bypassing season wrap-up)");
+
+            // Log whether this was called during voice decision or forced
+            if (_voiceDecisionInProgress)
+            {
+                Debug.Log("[VoiceDecision] ReturnToStartScreen called during active voice decision");
+            }
+            else
+            {
+                Debug.Log("[VoiceDecision] ReturnToStartScreen FORCED - no active voice decision (allowed)");
+            }
+
+            string closingMessage = "알겠어요! 처음 화면으로 돌아갈게요.";
+            Debug.Log($"[VoiceDecision] Speaking: '{closingMessage}'");
+
+            // Try to play TTS (brief acknowledgment)
+            if (ApiClient.IsBackendReachable && TtsPlayer.Instance != null)
+            {
+                yield return PlayTtsAndWait(closingMessage);
+            }
+            else
+            {
+                Debug.LogWarning("[VoiceDecision] Backend unreachable - skipping closing TTS");
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            // Check session validity before navigation
+            if (!IsSessionValid(sessionVersion))
+            {
+                Debug.Log("[VoiceDecision] Session invalidated during closing - aborting navigation");
+                yield break;
+            }
+
+            // Brief pause
+            yield return new WaitForSeconds(0.3f);
+
+            // === CLEANUP & RETURN TO START ===
+            Debug.Log("[VoiceDecision] Calling ResetSessionToHome() to return to Start screen");
+
+            // ResetSessionToHome handles:
+            // - Incrementing session version (stops all coroutines)
+            // - Stopping TTS and MicRecorder
+            // - Clearing UI, comparison panel
+            // - Setting state to Home
+            // - Calling HideLessonUI()
+            ResetSessionToHome();
+
+            Debug.Log("[VoiceDecision] Successfully returned to Start screen - START button should be visible");
+        }
+
+        /// <summary>
+        /// Force immediate return to Start screen. Can be called anytime.
+        /// Stops all active processes (TTS, STT, coroutines) and shows START button.
+        /// </summary>
+        public void ForceReturnToStartScreen()
+        {
+            Debug.Log("[Navigation] ForceReturnToStartScreen() called - forcing immediate return to Start");
+
+            // Reset voice decision state
+            _voiceDecisionInProgress = false;
+            _voiceDecisionRepromptCount = 0;
+
+            // ResetSessionToHome does all cleanup:
+            // - Stops TTS, MicRecorder, coroutines
+            // - Clears UI, sets state to Home
+            // - Shows START button
+            ResetSessionToHome();
+
+            Debug.Log("[Navigation] ForceReturnToStartScreen() complete - START button should be visible and clickable");
         }
 
         #endregion

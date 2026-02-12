@@ -31,44 +31,67 @@ const { grokHandler } = require('./src/grok');
 const { getConfigStatus, getMode, logStartupStatus, isElevenLabsConfigured, isXAIConfigured } = require('./src/mockMode');
 const { isXAIRealtimeConfigured } = require('./src/xaiRealtimeClient');
 const { createRateLimiter } = require('./src/rateLimit');
+const {
+  stubTtsHandler,
+  stubSttHandler,
+  stubEvalHandler,
+  stubFeedbackHandler,
+  stubGrokHandler,
+  stubPronounceHandler
+} = require('./src/stubs');
+
+// Helper to select real or stub handler based on mode
+const isMockMode = () => getMode() === 'mock';
 
 // =========================
-// Strict Environment Validation (Production)
+// Strict Environment Validation (REAL mode requires API keys)
 // =========================
 function validateEnvironment() {
+  const mode = (process.env.MODE || 'REAL').toUpperCase();
+
+  // Skip validation in MOCK mode - stubs will be used
+  if (mode === 'MOCK') {
+    console.log('\n📦 MODE=MOCK - Skipping API key validation (using stubs)\n');
+    return;
+  }
+
+  console.log('\n🔐 MODE=REAL - Validating required API keys...\n');
+
   const required = [];
   const warnings = [];
 
-  // At least one of ELEVENLABS or XAI must be configured for the app to be useful
+  // ElevenLabs is required for core TTS/STT functionality
   if (!process.env.ELEVENLABS_API_KEY) {
     required.push('ELEVENLABS_API_KEY (required for TTS/STT)');
   }
+  // xAI is optional but recommended for full functionality
   if (!process.env.XAI_API_KEY) {
-    warnings.push('XAI_API_KEY (required for Grok feedback - app will work with limited features)');
+    warnings.push('XAI_API_KEY (optional - enables Grok feedback/pronunciation)');
   }
 
   if (required.length > 0) {
-    console.error('\n❌ FATAL: Missing required environment variables:');
+    console.error('❌ FATAL: Missing required environment variables:');
     required.forEach(v => console.error(`   - ${v}`));
     if (warnings.length > 0) {
-      console.warn('\n⚠️  Also missing (optional but recommended):');
+      console.warn('\n⚠️  Also missing (optional):');
       warnings.forEach(v => console.warn(`   - ${v}`));
     }
-    console.error('\nSet these in your .env file or deployment environment.\n');
+    console.error('\nSet these in your deployment environment (Render/Railway dashboard).\n');
+    console.error('💡 TIP: Set MODE=MOCK to run locally with stub data (no keys needed).\n');
     process.exit(1);
   }
 
   if (warnings.length > 0) {
-    console.warn('\n⚠️  Missing optional environment variables:');
+    console.warn('⚠️  Missing optional environment variables:');
     warnings.forEach(v => console.warn(`   - ${v}`));
-    console.warn('');
+    console.warn('   (Server will run with reduced functionality)\n');
   }
+
+  console.log('✅ Required API keys validated.\n');
 }
 
-// Run validation in production mode
-if (process.env.NODE_ENV === 'production') {
-  validateEnvironment();
-}
+// Always run validation on startup (respects MODE setting)
+validateEnvironment();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -121,6 +144,37 @@ app.use((req, res, next) => {
 const rateLimiter = createRateLimiter(60);
 app.use('/api', rateLimiter);
 
+// Optional Bearer token auth (if BACKEND_TOKEN is set)
+// This is optional - if not set, all requests are allowed
+// Unity client does NOT need to send auth headers unless you set BACKEND_TOKEN
+const BACKEND_TOKEN = process.env.BACKEND_TOKEN;
+if (BACKEND_TOKEN) {
+  app.use('/api', (req, res, next) => {
+    // Skip auth for health check (needed for cloud health probes)
+    if (req.path === '/health') return next();
+
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Unauthorized',
+        details: 'Missing or invalid Authorization header. Use: Authorization: Bearer <token>'
+      });
+    }
+
+    const token = authHeader.slice(7); // Remove "Bearer "
+    if (token !== BACKEND_TOKEN) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Forbidden',
+        details: 'Invalid token'
+      });
+    }
+
+    next();
+  });
+}
+
 // Multer for file uploads (STT audio)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -158,7 +212,7 @@ app.get('/api/health', (req, res) => {
 
   res.json({
     ok: true,
-    ts: new Date().toISOString(),
+    timestamp: new Date().toISOString(),  // Unity expects "timestamp" not "ts"
     version: '1.0.0',
     ...configStatus
   });
@@ -166,36 +220,48 @@ app.get('/api/health', (req, res) => {
 
 /**
  * POST /api/tts
- * Text-to-Speech via ElevenLabs
+ * Text-to-Speech via ElevenLabs (or stub in mock mode)
  * Body: { text: string, voice_id?: string }
  * Returns: audio/mpeg
  */
-app.post('/api/tts', ttsHandler);
+app.post('/api/tts', (req, res, next) => {
+  if (isMockMode()) return stubTtsHandler(req, res);
+  return ttsHandler(req, res, next);
+});
 
 /**
  * POST /api/stt
- * Speech-to-Text via ElevenLabs
+ * Speech-to-Text via ElevenLabs (or stub in mock mode)
  * Body: multipart/form-data with 'audio' file
  * Returns: { ok, text, language, confidence }
  */
-app.post('/api/stt', upload.single('audio'), sttHandler);
+app.post('/api/stt', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubSttHandler(req, res);
+  return sttHandler(req, res, next);
+});
 
 /**
  * POST /api/feedback
- * Get pronunciation/shadowing feedback - Deterministic CER + xAI Grok
+ * Get pronunciation/shadowing feedback (or stub in mock mode)
  * Body: { targetText: string, transcriptText: string } (also accepts sttText for backward compat)
  * Returns: Structured feedback with metrics, diff, grammar corrections
  */
-app.post('/api/feedback', feedbackHandler);
+app.post('/api/feedback', (req, res, next) => {
+  if (isMockMode()) return stubFeedbackHandler(req, res);
+  return feedbackHandler(req, res, next);
+});
 
 /**
  * POST /api/grok
- * Dynamic tutor line generation via xAI Grok
+ * Dynamic tutor line generation via xAI Grok (or stub in mock mode)
  * Body: { model?: string, messages: [{role, content}], temperature?: number, max_tokens?: number }
  * Returns: Grok chat completion response (choices[0].message.content)
  * Used by Unity GrokClient for context-aware Korean tutor speech
  */
-app.post('/api/grok', grokHandler);
+app.post('/api/grok', (req, res, next) => {
+  if (isMockMode()) return stubGrokHandler(req, res);
+  return grokHandler(req, res, next);
+});
 
 /**
  * GET /api/sentences
@@ -207,15 +273,18 @@ app.get('/api/sentences', getSentences);
 
 /**
  * POST /api/pronounce_grok
- * Voice-based pronunciation feedback via xAI Realtime API
+ * Voice-based pronunciation feedback via xAI Realtime API (or stub in mock mode)
  * Body: multipart/form-data with 'audio' file + targetText + transcriptText (optional)
  * Returns: { ok, tutor: { weakPronunciation, strongPronunciation, shortComment } }
  */
-app.post('/api/pronounce_grok', upload.single('audio'), pronounceHandler);
+app.post('/api/pronounce_grok', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubPronounceHandler(req, res);
+  return pronounceHandler(req, res, next);
+});
 
 /**
  * POST /api/eval
- * Combined evaluation endpoint - one call does everything:
+ * Combined evaluation endpoint (or stub in mock mode)
  * A) ElevenLabs STT -> transcriptText
  * B) Punctuation-insensitive text scoring
  * C) xAI Realtime pronunciation feedback (optional)
@@ -223,7 +292,10 @@ app.post('/api/pronounce_grok', upload.single('audio'), pronounceHandler);
  * Body: multipart/form-data with 'audio' file + targetText + locale (optional)
  * Returns: { ok, transcriptText, textAccuracyPercent, mistakePercent, diff, pronunciation, grammar }
  */
-app.post('/api/eval', upload.single('audio'), evalHandler);
+app.post('/api/eval', upload.single('audio'), (req, res, next) => {
+  if (isMockMode()) return stubEvalHandler(req, res);
+  return evalHandler(req, res, next);
+});
 
 /**
  * POST /api/cache/clear
@@ -293,10 +365,15 @@ app.use((req, res) => {
 // Start server
 if (require.main === module) {
   const HOST = process.env.HOST || '0.0.0.0';
+  const mode = getMode();
+
   app.listen(PORT, HOST, () => {
     console.log(`\n🎯 AI-demo Backend Server`);
     console.log(`   Running on: http://${HOST}:${PORT}`);
     console.log(`   Environment: ${isProd ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+    if (mode === 'mock') {
+      console.log(`   🧪 MODE: MOCK (using stub responses - no API keys needed)`);
+    }
     console.log(`   Rate Limit: 60 req/min per IP`);
 
     // Log detailed startup status (mode + missing keys)
@@ -305,20 +382,58 @@ if (require.main === module) {
     console.log(`   Endpoints:`);
     console.log(`   - GET  /health (root health check)`);
     console.log(`   - GET  /api/health (detailed)`);
-    console.log(`   - POST /api/tts`);
-    console.log(`   - POST /api/stt`);
-    console.log(`   - POST /api/feedback`);
-    console.log(`   - POST /api/grok (dynamic tutor lines)`);
-    console.log(`   - POST /api/pronounce_grok (xAI Realtime)`);
-    console.log(`   - POST /api/eval (combined: STT + scoring + pronunciation + grammar)`);
+    console.log(`   - POST /api/tts${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/stt${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/feedback${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/grok${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/pronounce_grok${mode === 'mock' ? ' [STUB]' : ''}`);
+    console.log(`   - POST /api/eval${mode === 'mock' ? ' [STUB]' : ''}`);
     console.log(`   - GET  /api/sentences`);
     if (isDev) {
       console.log(`   - POST /api/cache/clear (dev only)`);
       console.log(`   - GET  /api/cache/stats (dev only)`);
     }
-    console.log(`   xAI Realtime: ${isXAIRealtimeConfigured() ? 'ENABLED' : 'DISABLED (no XAI_API_KEY)'}`)
+    if (mode !== 'mock') {
+      console.log(`   xAI Realtime: ${isXAIRealtimeConfigured() ? 'ENABLED' : 'DISABLED (no XAI_API_KEY)'}`)
+    }
+    console.log(`   Auth: ${BACKEND_TOKEN ? 'ENABLED (Bearer token required)' : 'DISABLED (open access)'}`);
+
+    // Print LAN IP helper for mobile testing
+    printLanIpHelp();
+
     console.log('');
   });
+}
+
+/**
+ * Print LAN IP addresses for mobile testing
+ */
+function printLanIpHelp() {
+  try {
+    const os = require('os');
+    const interfaces = os.networkInterfaces();
+    const lanIps = [];
+
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        // Skip internal and non-IPv4
+        if (iface.internal || iface.family !== 'IPv4') continue;
+        lanIps.push({ name, address: iface.address });
+      }
+    }
+
+    if (lanIps.length > 0) {
+      console.log('');
+      console.log('   📱 For Android/iOS testing, use one of these LAN URLs:');
+      lanIps.forEach(({ name, address }) => {
+        console.log(`      http://${address}:${PORT}  (${name})`);
+      });
+      console.log('');
+      console.log('   Test from phone browser: http://<IP>:' + PORT + '/api/health');
+    }
+  } catch (e) {
+    // Ignore network interface errors
+  }
 }
 
 module.exports = app;
