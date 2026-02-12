@@ -1,0 +1,221 @@
+{
+    "prefabPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Prefabs/Edumeta_CharacterGirl_AAA_Stand_Talk.prefab",
+    "timestamp": "2026-02-12 17:03:03",
+    "renderers": [
+        {
+            "gameObjectName": "CC_Base_Eye",
+            "hierarchyPath": "CC_Base_Eye",
+            "meshName": "CC_Base_Eye",
+            "subMeshCount": 4,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_R_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": [
+                        "_NORMALMAP"
+                    ]
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Cornea_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Cornea_R_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                },
+                {
+                    "slotIndex": 2,
+                    "materialName": "Std_Eye_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_L_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": [
+                        "_NORMALMAP"
+                    ]
+                },
+                {
+                    "slotIndex": 3,
+                    "materialName": "Std_Cornea_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Cornea_L_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "CC_Base_EyeOcclusion",
+            "hierarchyPath": "CC_Base_EyeOcclusion",
+            "meshName": "CC_Base_EyeOcclusion",
+            "subMeshCount": 2,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Eye_Occlusion_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_Occlusion_R_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Eye_Occlusion_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Eye_Occlusion_L_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "CC_Base_TearLine",
+            "hierarchyPath": "CC_Base_TearLine",
+            "meshName": "CC_Base_TearLine",
+            "subMeshCount": 2,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Std_Tearline_R_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Tearline_R_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Std_Tearline_L_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Std_Tearline_L_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2000,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 0.0,
+                    "renderModeDescription": "Opaque",
+                    "keywords": []
+                }
+            ]
+        },
+        {
+            "gameObjectName": "Curly_long_hair",
+            "hierarchyPath": "Curly_long_hair",
+            "meshName": "Curly_long_hair",
+            "subMeshCount": 1,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Hair_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Hair_Transparency_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2450,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 1.0,
+                    "renderModeDescription": "Cutout",
+                    "keywords": [
+                        "_ALPHATEST_ON"
+                    ]
+                }
+            ]
+        },
+        {
+            "gameObjectName": "Hair_Base",
+            "hierarchyPath": "Hair_Base",
+            "meshName": "Hair_Base",
+            "subMeshCount": 2,
+            "materialSlots": [
+                {
+                    "slotIndex": 0,
+                    "materialName": "Hair_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Hair_Transparency_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2450,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 1.0,
+                    "renderModeDescription": "Cutout",
+                    "keywords": [
+                        "_ALPHATEST_ON"
+                    ]
+                },
+                {
+                    "slotIndex": 1,
+                    "materialName": "Scalp_Transparency_Diffuse",
+                    "materialPath": "Assets/Art/Characters/Edumeta_CharacterGirl_AAA/Materials_Rebuilt/Scalp_Transparency_Diffuse.mat",
+                    "shaderName": "Standard",
+                    "renderQueue": 2450,
+                    "hasMainTex": true,
+                    "mainTexAssigned": true,
+                    "hasBaseMap": false,
+                    "baseMapAssigned": false,
+                    "standardMode": 1.0,
+                    "renderModeDescription": "Cutout",
+                    "keywords": [
+                        "_ALPHATEST_ON"
+                    ]
+                }
+            ]
+        }
+    ],
+    "totalMaterialsMissingTexture": 0,
+    "totalMaterialsWrongShader": 0,
+    "opaqueOverlays": [
+        "CC_Base_Eye[1] -> Std_Cornea_R_Diffuse",
+        "CC_Base_Eye[3] -> Std_Cornea_L_Diffuse",
+        "CC_Base_EyeOcclusion[0] -> Std_Eye_Occlusion_R_Diffuse",
+        "CC_Base_EyeOcclusion[1] -> Std_Eye_Occlusion_L_Diffuse",
+        "CC_Base_TearLine[0] -> Std_Tearline_R_Diffuse",
+        "CC_Base_TearLine[1] -> Std_Tearline_L_Diffuse"
+    ],
+    "issues": []
+}
