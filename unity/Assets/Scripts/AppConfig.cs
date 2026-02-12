@@ -90,6 +90,13 @@ namespace ShadowingTutor
                         Debug.LogWarning("[AppConfig] No AppConfig found in Resources. Using defaults.");
                         _instance = CreateInstance<AppConfig>();
                     }
+
+                    // Log startup configuration (once)
+                    #if UNITY_EDITOR
+                    Debug.Log($"[AppConfig] Initialized (Editor): BackendBaseUrl={_instance.BackendBaseUrl}");
+                    #else
+                    Debug.Log($"[AppConfig] Initialized (Device): BackendBaseUrl={_instance.BackendBaseUrl}, HealthUrl={_instance.HealthUrl}");
+                    #endif
                 }
                 return _instance;
             }
@@ -172,11 +179,13 @@ namespace ShadowingTutor
                     }
                     else
                     {
+                        // CRITICAL FIX: Force switch to Production URL instead of returning non-functional localhost
                         if (!_localhostWarningLogged)
                         {
-                            Debug.LogError("[AppConfig] localhost not available on device. Please configure LAN IP in Settings or use Production environment.");
+                            Debug.LogWarning($"[AppConfig] localhost not available on device. Auto-switching to Production: {_productionUrl}");
                             _localhostWarningLogged = true;
                         }
+                        return _productionUrl.TrimEnd('/');
                     }
                 }
                 #endif

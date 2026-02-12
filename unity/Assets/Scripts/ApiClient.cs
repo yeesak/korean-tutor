@@ -386,7 +386,7 @@ namespace ShadowingTutor
 
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
-                request.timeout = 30;  // Allow time for Render free-tier cold start (30-60s)
+                request.timeout = 60;  // Allow time for Render free-tier cold start (can take 60s+)
                 yield return request.SendWebRequest();
 
                 if (request.result != UnityWebRequest.Result.Success)
@@ -479,7 +479,7 @@ namespace ShadowingTutor
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 request.downloadHandler = new DownloadHandlerAudioClip(url, AudioType.MPEG);
                 request.SetRequestHeader("Content-Type", "application/json");
-                request.timeout = 15;  // Shorter timeout for TTS (user-facing)
+                request.timeout = 30;  // Increased for longer Grok answers (TTS generation)
 
                 yield return request.SendWebRequest();
 

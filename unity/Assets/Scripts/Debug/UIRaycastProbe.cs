@@ -12,9 +12,14 @@ namespace ShadowingTutor.Diagnostics
     /// <summary>
     /// Debug probe that logs UI raycast hits ONLY on click/tap begin.
     /// No per-frame spam. Attach to any GameObject in the scene to enable.
+    /// Disabled by default in builds - enable via Inspector for debugging.
     /// </summary>
     public class UIRaycastProbe : MonoBehaviour
     {
+        [Header("Logging Control")]
+        [Tooltip("Master switch - disable to silence all UIRaycastProbe logs")]
+        [SerializeField] private bool _enableLogging = false;  // OFF by default to prevent spam
+
         [SerializeField] private bool _logEveryFrame = false;
         [SerializeField] private bool _logOnTouch = true;
 
@@ -23,11 +28,17 @@ namespace ShadowingTutor.Diagnostics
 
         private void Start()
         {
-            LogInputSystemStatus();
+            if (_enableLogging)
+            {
+                LogInputSystemStatus();
+            }
         }
 
         private void Update()
         {
+            // Master switch - skip everything if logging disabled
+            if (!_enableLogging) return;
+
             // Only probe on actual click/tap begin (no spam)
             if (!WasPointerPressedThisFrame(out Vector2 pointerPos))
             {

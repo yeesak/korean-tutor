@@ -24,6 +24,15 @@ namespace ShadowingTutor.UI
         [SerializeField] private Image _backgroundImage;
         [SerializeField] private CanvasGroup _canvasGroup;
 
+        // Dynamic sizing references (set by CreateDynamic)
+        private RectTransform _panelRect;
+        private RectTransform _contentRect;
+        private ScrollRect _scrollRect;
+
+        // Height constraints
+        private const float MIN_PANEL_HEIGHT = 280f;
+        private const float MAX_PANEL_HEIGHT_RATIO = 0.70f;  // 70% of screen height max
+
         // Colors
         private const string COLOR_CORRECT = "#000000";  // Black
         private const string COLOR_WRONG = "#FF0000";    // Red
@@ -103,7 +112,99 @@ namespace ShadowingTutor.UI
                 _accuracyText.supportRichText = true;
             }
 
+            // Adjust panel height based on content
+            AdjustPanelHeight();
+
             Debug.Log($"[ComparisonPanelUGUI] Shown: target='{targetSentence}', user='{userTranscript}', accuracy={accuracyPercent}%");
+        }
+
+        /// <summary>
+        /// Adjust panel height to fit content, with max height clamping.
+        /// If content exceeds max, enable scrolling.
+        /// </summary>
+        private void AdjustPanelHeight()
+        {
+            if (_panelRect == null || _contentRect == null) return;
+
+            // Force layout rebuild to get accurate sizes
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRect);
+
+            // Get content's preferred height
+            float contentHeight = _contentRect.rect.height;
+            if (contentHeight <= 0)
+            {
+                // Fallback: sum up text preferred heights
+                contentHeight = CalculateContentHeight();
+            }
+
+            // Calculate max allowed height (70% of screen)
+            float maxHeight = Screen.height * MAX_PANEL_HEIGHT_RATIO;
+
+            // Clamp height
+            float panelHeight = Mathf.Clamp(contentHeight, MIN_PANEL_HEIGHT, maxHeight);
+
+            // Apply height to panel
+            _panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, panelHeight);
+
+            // Enable/disable scrolling based on content overflow
+            if (_scrollRect != null)
+            {
+                bool needsScroll = contentHeight > maxHeight;
+                _scrollRect.enabled = needsScroll;
+                _scrollRect.verticalNormalizedPosition = 1f;  // Scroll to top
+
+                // Log only once per adjustment
+                if (needsScroll)
+                {
+                    Debug.Log($"[ComparisonPanelUGUI] Panel height clamped: content={contentHeight:F0}, panel={panelHeight:F0}, scrolling enabled");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Calculate content height by summing text preferred heights.
+        /// Used as fallback when ContentSizeFitter hasn't computed yet.
+        /// </summary>
+        private float CalculateContentHeight()
+        {
+            float height = 80f;  // Base padding (top + bottom)
+            float spacing = 20f;
+            int textCount = 0;
+
+            if (_userLabel != null)
+            {
+                height += _userLabel.preferredHeight;
+                textCount++;
+            }
+            if (_userText != null)
+            {
+                height += _userText.preferredHeight;
+                textCount++;
+            }
+            if (_targetLabel != null)
+            {
+                height += _targetLabel.preferredHeight;
+                textCount++;
+            }
+            if (_targetText != null)
+            {
+                height += _targetText.preferredHeight;
+                textCount++;
+            }
+            if (_accuracyText != null)
+            {
+                height += _accuracyText.preferredHeight;
+                textCount++;
+            }
+
+            // Add spacing between elements
+            if (textCount > 1)
+            {
+                height += spacing * (textCount - 1);
+            }
+
+            return height;
         }
 
         /// <summary>
@@ -342,6 +443,7 @@ namespace ShadowingTutor.UI
 
         /// <summary>
         /// Create a ComparisonPanelUGUI dynamically at runtime.
+        /// Uses ScrollRect to handle long text that overflows the panel.
         /// </summary>
         public static ComparisonPanelUGUI CreateDynamic(Canvas parentCanvas)
         {
@@ -354,16 +456,18 @@ namespace ShadowingTutor.UI
             // Get Korean font
             Font koreanFont = OSFontProvider.GetKoreanCapableFont(48);
 
-            // Create panel root
+            // Create panel root (fixed size, acts as viewport)
             GameObject panelGO = new GameObject("ComparisonPanelUGUI");
             panelGO.transform.SetParent(parentCanvas.transform, false);
 
-            // Add RectTransform - centered, 85% width, upper area
+            // Add RectTransform - centered, 85% width, auto-height based on content
+            // Uses anchors for horizontal stretch, but vertical is controlled by ContentSizeFitter
             RectTransform panelRect = panelGO.AddComponent<RectTransform>();
-            panelRect.anchorMin = new Vector2(0.075f, 0.30f);  // 7.5% from sides, 30% from bottom
-            panelRect.anchorMax = new Vector2(0.925f, 0.95f);  // 7.5% from sides, 5% from top
-            panelRect.offsetMin = Vector2.zero;
-            panelRect.offsetMax = Vector2.zero;
+            panelRect.anchorMin = new Vector2(0.075f, 0.5f);   // 7.5% from sides, vertically centered
+            panelRect.anchorMax = new Vector2(0.925f, 0.5f);   // Same - vertical pivot in center
+            panelRect.pivot = new Vector2(0.5f, 0.5f);         // Center pivot for nice positioning
+            panelRect.anchoredPosition = new Vector2(0, 100);  // Slightly above center
+            panelRect.sizeDelta = new Vector2(0, 300);         // Initial height, will be adjusted
 
             // Add background image
             Image bgImage = panelGO.AddComponent<Image>();
@@ -374,20 +478,45 @@ namespace ShadowingTutor.UI
             canvasGroup.alpha = 1f;
             canvasGroup.blocksRaycasts = false;
 
-            // Add VerticalLayoutGroup
-            VerticalLayoutGroup layout = panelGO.AddComponent<VerticalLayoutGroup>();
+            // Add Mask to clip content inside panel bounds
+            Mask mask = panelGO.AddComponent<Mask>();
+            mask.showMaskGraphic = true;  // Show the background
+
+            // Create scrollable content container
+            GameObject contentGO = new GameObject("Content");
+            contentGO.transform.SetParent(panelGO.transform, false);
+
+            RectTransform contentRect = contentGO.AddComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0, 1);  // Top-left anchor for scroll
+            contentRect.anchorMax = new Vector2(1, 1);
+            contentRect.pivot = new Vector2(0.5f, 1);
+            contentRect.offsetMin = Vector2.zero;
+            contentRect.offsetMax = Vector2.zero;
+
+            // Add VerticalLayoutGroup to content
+            VerticalLayoutGroup layout = contentGO.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(50, 50, 40, 40);
             layout.spacing = 20;
-            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childAlignment = TextAnchor.UpperCenter;  // Top align for scroll
             layout.childControlWidth = true;
             layout.childControlHeight = true;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            // Add ContentSizeFitter
-            ContentSizeFitter fitter = panelGO.AddComponent<ContentSizeFitter>();
-            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            // Add ContentSizeFitter to content (grows with text)
+            ContentSizeFitter contentFitter = contentGO.AddComponent<ContentSizeFitter>();
+            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            // Add ScrollRect to panel for overflow handling
+            ScrollRect scrollRect = panelGO.AddComponent<ScrollRect>();
+            scrollRect.content = contentRect;
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 30f;
+            scrollRect.inertia = true;
+            scrollRect.decelerationRate = 0.135f;
 
             // Add ComparisonPanelUGUI component
             ComparisonPanelUGUI panel = panelGO.AddComponent<ComparisonPanelUGUI>();
@@ -395,23 +524,35 @@ namespace ShadowingTutor.UI
             panel._canvasGroup = canvasGroup;
             panel._koreanFont = koreanFont;
 
-            // Create text elements
+            // Create text elements inside content container
+            // ORDER: User utterance FIRST (top, biggest), then answer, then accuracy
             Color labelColor = new Color(0.3f, 0.3f, 0.3f);
 
-            panel._targetLabel = CreateTextElement(panelGO.transform, "TargetLabel", "정답:", 40, FontStyle.Bold, labelColor, koreanFont);
-            panel._targetText = CreateTextElement(panelGO.transform, "TargetText", "", 60, FontStyle.Normal, Color.black, koreanFont);
-            panel._userLabel = CreateTextElement(panelGO.transform, "UserLabel", "내 발음:", 40, FontStyle.Bold, labelColor, koreanFont);
-            panel._userText = CreateTextElement(panelGO.transform, "UserText", "", 72, FontStyle.Normal, Color.black, koreanFont);
+            // User utterance at TOP - biggest font for emphasis
+            panel._userLabel = CreateTextElement(contentGO.transform, "UserLabel", "내 발음:", 40, FontStyle.Bold, labelColor, koreanFont);
+            panel._userText = CreateTextElement(contentGO.transform, "UserText", "", 72, FontStyle.Normal, Color.black, koreanFont);
             panel._userText.supportRichText = true;
-            panel._accuracyText = CreateTextElement(panelGO.transform, "AccuracyText", "", 48, FontStyle.Bold, Color.black, koreanFont);
+
+            // Correct answer below
+            panel._targetLabel = CreateTextElement(contentGO.transform, "TargetLabel", "정답:", 40, FontStyle.Bold, labelColor, koreanFont);
+            panel._targetText = CreateTextElement(contentGO.transform, "TargetText", "", 56, FontStyle.Normal, Color.black, koreanFont);
+
+            // Accuracy at bottom
+            panel._accuracyText = CreateTextElement(contentGO.transform, "AccuracyText", "", 44, FontStyle.Bold, Color.black, koreanFont);
             panel._accuracyText.supportRichText = true;
 
-            Debug.Log("[ComparisonPanelUGUI] Dynamic panel created");
+            // Store references for dynamic height adjustment
+            panel._panelRect = panelRect;
+            panel._contentRect = contentRect;
+            panel._scrollRect = scrollRect;
+
+            Debug.Log("[ComparisonPanelUGUI] Dynamic panel created with ScrollRect support");
             return panel;
         }
 
         /// <summary>
         /// Create a Text element with specified properties.
+        /// Enables Best Fit (auto-sizing) with min/max bounds to prevent overflow.
         /// </summary>
         private static Text CreateTextElement(Transform parent, string name, string text, int fontSize, FontStyle style, Color color, Font font)
         {
@@ -422,13 +563,18 @@ namespace ShadowingTutor.UI
             RectTransform rect = go.AddComponent<RectTransform>();
             rect.sizeDelta = new Vector2(0, fontSize * 1.5f);
 
-            // Add LayoutElement
+            // Add LayoutElement - flexible height to grow with wrapped text
             LayoutElement layoutElem = go.AddComponent<LayoutElement>();
-            layoutElem.minHeight = fontSize * 1.2f;
-            layoutElem.preferredHeight = fontSize * 1.5f;
+            layoutElem.minHeight = fontSize * 0.8f;   // Reduced min for Best Fit
             layoutElem.flexibleWidth = 1f;
+            layoutElem.flexibleHeight = 1f;  // Allow height to grow
 
-            // Add Text component
+            // Add ContentSizeFitter to size based on text content
+            ContentSizeFitter fitter = go.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // Add Text component with Best Fit (auto-sizing)
             Text textComp = go.AddComponent<Text>();
             textComp.text = text;
             textComp.font = font;
@@ -437,8 +583,13 @@ namespace ShadowingTutor.UI
             textComp.color = color;
             textComp.alignment = TextAnchor.MiddleCenter;
             textComp.horizontalOverflow = HorizontalWrapMode.Wrap;
-            textComp.verticalOverflow = VerticalWrapMode.Overflow;
+            textComp.verticalOverflow = VerticalWrapMode.Truncate;  // Truncate as final fallback
             textComp.supportRichText = true;
+
+            // Enable Best Fit (auto-sizing like TMP autosize)
+            textComp.resizeTextForBestFit = true;
+            textComp.resizeTextMinSize = Math.Max(18, fontSize / 3);  // Readable minimum
+            textComp.resizeTextMaxSize = fontSize;
 
             return textComp;
         }

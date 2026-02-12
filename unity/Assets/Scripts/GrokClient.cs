@@ -13,7 +13,7 @@ namespace ShadowingTutor
     public static class GrokClient
     {
         // Grok API configuration
-        private const float GROK_TIMEOUT_SECONDS = 10f;
+        private const float GROK_TIMEOUT_SECONDS = 30f;  // Increased for longer LLM responses
         private const int MAX_LAST_MESSAGE_LENGTH = 220;
 
         #region Prompt Templates (EXACT as specified)
@@ -28,7 +28,7 @@ Rules: Korean only, 1-3 short sentences, no markdown/JSON, no meta parentheses, 
 
 States:
 - PROMPT: ask user to repeat targetPhrase naturally.
-- FEEDBACK_EXCELLENT: strong praise + ask to move on to next (""다음 걸로 넘어가 볼까요?"" yes/no). Do NOT suggest retry.
+- FEEDBACK_EXCELLENT: strong praise only (e.g., ""정말 잘했어요!""). Do NOT ask about moving on or suggest retry - Q&A flow handles that separately.
 - FEEDBACK_PASS: praise + short coaching using mismatchSummary + ask optional one more polish attempt (""한 번만 더 매끈하게 해볼까요?"" yes/no).
 - FEEDBACK_FAIL/RETRY: encouragement + mismatchSummary + clear retry intent including 'I will read again' meaning (""제가 다시 읽어드릴게요"").
 - SEASON_END: yes/no prompt meaning 'move to next season?' (end with a short yes/no question).";
@@ -66,7 +66,8 @@ Return ONLY the final Korean line(s).";
             FEEDBACK_PASS,      // Feedback when 65% <= accuracy < 90% - praise + coaching + optional polish
             FEEDBACK_FAIL,      // Feedback when accuracy < 65% - encouragement + retry
             RETRY,              // RetryPrompt - guided retry after fail
-            SEASON_END          // SeasonEndPrompt - ask yes/no for next season
+            SEASON_END,         // SeasonEndPrompt - ask yes/no for next season
+            QUESTION_ANSWER     // Answer user's on-topic question about the lesson
         }
 
         /// <summary>
@@ -188,8 +189,8 @@ Return ONLY the final Korean line(s).";
         };
 
         private static readonly string[] FALLBACK_FEEDBACK_EXCELLENT = {
-            "정말 잘했어요! 완전 현지인 같아요! 다음 걸로 넘어가 볼까요?",
-            "완벽해요! 한국인인 줄 알았어요! 다음으로 넘어갈까요?"
+            "정말 잘했어요! 완전 현지인 같아요!",
+            "완벽해요! 한국인인 줄 알았어요!"
         };
 
         private static readonly string[] FALLBACK_FEEDBACK_PASS = {
@@ -211,6 +212,10 @@ Return ONLY the final Korean line(s).";
             "이번 시즌 끝났어요! 다음으로 넘길까요?"
         };
 
+        private static readonly string[] FALLBACK_QUESTION_ANSWER = {
+            "오늘 주제에 대해서만 질문해 주세요!"
+        };
+
         private static string GetFallbackLine(TutorState state)
         {
             string[] options = state switch
@@ -222,6 +227,7 @@ Return ONLY the final Korean line(s).";
                 TutorState.FEEDBACK_FAIL => FALLBACK_FEEDBACK_FAIL,
                 TutorState.RETRY => FALLBACK_RETRY,
                 TutorState.SEASON_END => FALLBACK_SEASON_END,
+                TutorState.QUESTION_ANSWER => FALLBACK_QUESTION_ANSWER,
                 _ => FALLBACK_PROMPT
             };
             return options[UnityEngine.Random.Range(0, options.Length)];

@@ -78,10 +78,12 @@ namespace ShadowingTutor
         {
             if (_instance != null && _instance != this)
             {
+                Debug.LogWarning($"[TtsPlayer] Duplicate instance detected! Existing={_instance.GetInstanceID()}, Destroying={GetInstanceID()}");
                 Destroy(gameObject);
                 return;
             }
             _instance = this;
+            Debug.Log($"[TtsPlayer] Singleton initialized. InstanceID={GetInstanceID()}");
             _audioSource = GetComponent<AudioSource>();
             _audioSource.playOnAwake = false;
             _audioSource.loop = false;  // CRITICAL: Prevent infinite loop issues

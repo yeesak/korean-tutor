@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 using ShadowingTutor.UI;
@@ -43,6 +44,7 @@ namespace ShadowingTutor
             Feedback,          // Speaking feedback TTS
             RetryPrompt,       // "다시해볼까?" + guided retry
             SeasonEndPrompt,   // "다음 시즌?" YES/NO parsing
+            AwaitingQnA,       // Q&A loop: waiting for user question or "move on"
             End                // Session ended
         }
 
@@ -86,6 +88,14 @@ namespace ShadowingTutor
         private Text _stopAiButtonText;
         private Image _stopAiButtonImage;
 
+        [Header("Hold-to-Record Button")]
+        [SerializeField] private HoldToRecordButton _holdToRecordButton;
+
+        [Header("Input Blocker Overlay")]
+        [Tooltip("Full-screen overlay that blocks all input during processing. Should have CanvasGroup with blocksRaycasts=true.")]
+        [SerializeField] private CanvasGroup _inputBlockerOverlay;
+        [SerializeField] private Text _inputBlockerText;
+
         [Header("Recording UI")]
         [SerializeField] private Image _recordingIndicator;
         [SerializeField] private Slider _recordingProgress;
@@ -112,6 +122,7 @@ namespace ShadowingTutor
 
         private TutorState _currentState = TutorState.Boot;
         private bool _isInitialized = false;
+        private bool _waitingForUserRecord = false;  // Press-and-hold mode: waiting for user to start recording
         private bool _isBackendConnected = false;  // Track connectivity for retry logic
         private float _lastButtonPressTime = 0f;
         private Image _mainButtonImage;
@@ -176,10 +187,27 @@ namespace ShadowingTutor
         private int _voiceDecisionRepromptCount = 0;
         private const int MAX_VOICE_REPROMPTS = 1;
 
+        // Q&A flow state - prevents duplicate processing
+        private bool _qnaProcessingInProgress = false;  // True while ProcessQnARecordingCoroutine is running
+        private bool _qnaDone = false;                  // Set true when ADVANCE detected, signals flow exit
+        private bool _qnaFollowupPromptPlayed = false;  // True when ProcessQnARecordingCoroutine already prompted for more questions
+        private bool _qnaRoundComplete = false;         // Set true when Q&A round completes (answered or reprompted), signals wait loop to continue
+
+        // Input lock state - blocks ALL user input during processing (STT/Grok/TTS)
+        private bool _inputLocked = false;
+
+        // Speech coordination - prevents duplicate TTS and ignores stale callbacks
+        private int _speechSeq = 0;  // Incremented before each TTS, used to ignore late callbacks
+        private bool _ttsInProgress = false;  // True while TTS is playing - prevents duplicate calls
+
         // Session versioning for safe cancellation
         // Incremented on every ResetSessionToHome() call
         // Coroutines check this to bail out if session changed
         private int _sessionVersion = 0;
+
+        // Recording pipeline token for stale callback prevention
+        // Incremented on every recording start, checked in callbacks to ignore late responses
+        private int _recordingPipelineToken = 0;
 
         // Idle/Silence termination tracking
         // Tracks last meaningful user activity to detect prolonged silence
@@ -449,6 +477,7 @@ namespace ShadowingTutor
             else
             {
                 _isBackendConnected = true;
+                // Ready for user to press Start button
             }
         }
 
@@ -549,6 +578,37 @@ namespace ShadowingTutor
                 Debug.Log("[TutorRoom] STOP AI button wired");
             }
 
+            // Wire hold-to-record button (press-and-hold recording)
+            // If no separate hold-to-record button assigned, try to use/add one on the main button
+            if (_holdToRecordButton == null && _mainButton != null)
+            {
+                _holdToRecordButton = _mainButton.GetComponent<HoldToRecordButton>();
+                if (_holdToRecordButton == null)
+                {
+                    _holdToRecordButton = _mainButton.gameObject.AddComponent<HoldToRecordButton>();
+                    Debug.Log("[TutorRoom] Added HoldToRecordButton to main button");
+                }
+            }
+
+            if (_holdToRecordButton != null)
+            {
+                _holdToRecordButton.CanStartRecording = () => CanUserStartRecording();
+                _holdToRecordButton.IsInputLocked = () => _inputLocked;  // Gate: block during STT/Grok/TTS
+                _holdToRecordButton.OnRecordStart += OnHoldRecordStart;
+                _holdToRecordButton.OnRecordStop += OnHoldRecordStop;
+                _holdToRecordButton.SetInteractable(false);  // Disabled until ready for recording
+                Debug.Log("[TutorRoom] Hold-to-record button wired");
+            }
+
+            // Initialize input blocker overlay (hidden by default)
+            if (_inputBlockerOverlay != null)
+            {
+                _inputBlockerOverlay.gameObject.SetActive(false);
+                _inputBlockerOverlay.alpha = 0f;
+                _inputBlockerOverlay.blocksRaycasts = false;
+                _inputBlockerOverlay.interactable = false;
+            }
+
             // Hide loading/recording indicators
             if (_loadingIndicator != null) _loadingIndicator.SetActive(false);
             if (_recordingIndicator != null) _recordingIndicator.gameObject.SetActive(false);
@@ -634,6 +694,13 @@ namespace ShadowingTutor
                 MicRecorder.Instance.OnRecordingComplete -= OnRecordingComplete;
                 MicRecorder.Instance.OnRecordingError -= OnRecordingError;
             }
+
+            // Cleanup hold-to-record button events
+            if (_holdToRecordButton != null)
+            {
+                _holdToRecordButton.OnRecordStart -= OnHoldRecordStart;
+                _holdToRecordButton.OnRecordStop -= OnHoldRecordStop;
+            }
         }
 
         #endregion
@@ -680,6 +747,9 @@ namespace ShadowingTutor
                 case TutorState.SeasonEndPrompt:
                     Debug.Log("[TutorRoom] Season end - asking YES/NO");
                     break;
+                case TutorState.AwaitingQnA:
+                    Debug.Log("[TutorRoom] Q&A mode - waiting for question or 'move on'");
+                    break;
                 case TutorState.End:
                     Debug.Log("[TutorRoom] Session ended");
                     break;
@@ -690,13 +760,11 @@ namespace ShadowingTutor
         {
             if (_mainButton == null) return;
 
-            // Determine if AI is speaking (TTS active)
-            bool isAiSpeaking = _currentState == TutorState.SeasonIntro ||
-                                _currentState == TutorState.TopicPrompt ||
-                                _currentState == TutorState.Feedback ||
-                                _currentState == TutorState.RetryPrompt;
+            // Determine if AI is speaking (TTS actually playing, not just state)
+            // Fix B: Use TtsPlayer.IsPlaying for accurate detection, not state-based
+            bool isAiSpeaking = TtsPlayer.Instance != null && TtsPlayer.Instance.IsPlaying;
 
-            // Show/hide STOP AI button based on whether AI is speaking
+            // Show/hide STOP AI button based on whether TTS audio is actually playing
             if (_stopAiButton != null)
             {
                 _stopAiButton.gameObject.SetActive(isAiSpeaking);
@@ -706,19 +774,45 @@ namespace ShadowingTutor
                 }
             }
 
+            // Recording states: user can record (but NOT while TTS is playing)
+            bool isRecordingState = _currentState == TutorState.Recording ||
+                                    _currentState == TutorState.AwaitingQnA ||
+                                    _currentState == TutorState.Feedback;
+            // Fix B: Hide record button when STOP AI is visible (mutual exclusion)
+            bool showRecordButton = isRecordingState && !isAiSpeaking;
+
             switch (_currentState)
             {
                 case TutorState.Boot:
                 case TutorState.Home:
-                    SetButtonState("START", _buttonIdleColor, true);
+                    SetButtonState("시작", _buttonIdleColor, true);
+                    if (_mainButton != null) _mainButton.gameObject.SetActive(true);
                     break;
 
                 case TutorState.Recording:
-                    SetButtonState("STOP", _buttonRecordingColor, true);
+                case TutorState.AwaitingQnA:
+                case TutorState.Feedback:
+                    // Fix B: Only show record button when TTS is NOT playing
+                    if (_mainButton != null)
+                    {
+                        _mainButton.gameObject.SetActive(showRecordButton);
+                        _mainButton.interactable = showRecordButton;
+                    }
+                    // Set idle label for hold-to-record (HoldToRecordButton handles recording visual)
+                    if (_holdToRecordButton != null && showRecordButton)
+                    {
+                        _holdToRecordButton.SetInteractable(true);
+                    }
+                    else if (_mainButtonText != null && showRecordButton)
+                    {
+                        // Fallback if no HoldToRecordButton component
+                        _mainButtonText.text = "꾹 눌러 녹음";
+                    }
                     break;
 
                 default:
                     SetButtonState("...", _buttonDisabledColor, false);
+                    if (_mainButton != null) _mainButton.gameObject.SetActive(false);
                     break;
             }
         }
@@ -755,13 +849,16 @@ namespace ShadowingTutor
                     _statusText.text = "평가 중...";
                     break;
                 case TutorState.Feedback:
-                    _statusText.text = "피드백 중...";
+                    _statusText.text = "꾹 눌러 녹음";  // "Press and hold to record"
                     break;
                 case TutorState.RetryPrompt:
                     _statusText.text = "다시 들어봐~";
                     break;
                 case TutorState.SeasonEndPrompt:
                     _statusText.text = "다음 시즌?";
+                    break;
+                case TutorState.AwaitingQnA:
+                    _statusText.text = "꾹 눌러 녹음";
                     break;
                 case TutorState.End:
                     _statusText.text = "수고했어요!";
@@ -775,8 +872,112 @@ namespace ShadowingTutor
         }
 
         /// <summary>
+        /// Lock or unlock ALL user input during processing phases.
+        /// When locked: Full-screen overlay blocks all raycasts, button disabled with message.
+        /// Call with lock=true at start of STT/Grok/TTS, lock=false when returning to prompt.
+        /// </summary>
+        /// <param name="locked">True to block all input, false to allow</param>
+        /// <param name="message">Message to show (e.g., "인식중...", "생각중...", "답변중...")</param>
+        public void SetInputLocked(bool locked, string message = null)
+        {
+            _inputLocked = locked;
+
+            // Update blocker overlay
+            if (_inputBlockerOverlay != null)
+            {
+                _inputBlockerOverlay.gameObject.SetActive(locked);
+                _inputBlockerOverlay.blocksRaycasts = locked;
+                _inputBlockerOverlay.interactable = locked;
+                _inputBlockerOverlay.alpha = locked ? 0.3f : 0f;  // Semi-transparent when blocking
+            }
+
+            // Update blocker text
+            if (_inputBlockerText != null)
+            {
+                _inputBlockerText.gameObject.SetActive(locked && !string.IsNullOrEmpty(message));
+                if (locked && !string.IsNullOrEmpty(message))
+                {
+                    _inputBlockerText.text = message;
+                }
+            }
+
+            // Also update the hold-to-record button's thinking state
+            if (_holdToRecordButton != null)
+            {
+                _holdToRecordButton.SetThinkingState(locked, message);
+            }
+
+            Debug.Log($"[INPUT] SetInputLocked({locked}, \"{message ?? ""}\")");
+        }
+
+        /// <summary>
+        /// Check if input is currently locked.
+        /// </summary>
+        public bool IsInputLocked => _inputLocked;
+
+        /// <summary>
+        /// Reset recording pipeline to safe idle state after ANY error.
+        /// Called from: OnRecordingError, STT timeout, feedback timeout, etc.
+        /// CRITICAL: After this call, user can immediately start a new recording.
+        /// </summary>
+        /// <param name="reason">Logging context for debug</param>
+        /// <param name="keepAttemptCounters">If true, preserve retry count for retry logic</param>
+        private void ResetRecordingPipeline(string reason, bool keepAttemptCounters = true)
+        {
+            Debug.Log($"[PIPELINE] Reset: {reason} (keepCounters={keepAttemptCounters})");
+
+            // 1. Increment token to invalidate any pending callbacks
+            _recordingPipelineToken++;
+
+            // 2. Reset recording state flags - CRITICAL for next recording to work
+            _waitingForUserRecord = true;  // Ready for new recording
+
+            // 3. Clear any pending recording state
+            _rawTranscriptText = "";
+            _transcriptText_value = "";
+
+            // 4. Stop any active recording
+            if (MicRecorder.Instance != null && MicRecorder.Instance.IsRecording)
+            {
+                MicRecorder.Instance.StopRecordingGracefully();
+            }
+
+            // 5. Reset UI to idle
+            SetInputLocked(false);
+            if (_holdToRecordButton != null)
+            {
+                _holdToRecordButton.ResetState();
+                _holdToRecordButton.SetInteractable(true);
+            }
+            if (_recordingIndicator != null)
+            {
+                _recordingIndicator.gameObject.SetActive(false);
+            }
+            if (_recordingProgress != null)
+            {
+                _recordingProgress.gameObject.SetActive(false);
+            }
+
+            // 6. Reset counters if requested
+            if (!keepAttemptCounters)
+            {
+                _retryCount = 0;
+                _consecutiveSilenceCount = 0;
+            }
+
+            // 7. Update hint text
+            if (_hintText != null)
+            {
+                _hintText.text = "꾹 눌러서 따라 말해봐!";
+            }
+
+            Debug.Log($"[PIPELINE] Reset complete: token={_recordingPipelineToken}, waitingForUser={_waitingForUserRecord}");
+        }
+
+        /// <summary>
         /// Centralized recording UI visibility control.
-        /// Recording indicator and progress bar ONLY visible in Recording state.
+        /// Recording indicator visible in Recording state.
+        /// Progress bar permanently hidden (using press-and-hold instead of timed recording).
         /// </summary>
         private void UpdateRecordingUI()
         {
@@ -791,13 +992,10 @@ namespace ShadowingTutor
                 }
             }
 
+            // Progress bar permanently hidden - using press-and-hold recording now
             if (_recordingProgress != null)
             {
-                _recordingProgress.gameObject.SetActive(showRecording);
-                if (showRecording)
-                {
-                    _recordingProgress.value = 0;
-                }
+                _recordingProgress.gameObject.SetActive(false);
             }
         }
 
@@ -857,18 +1055,19 @@ namespace ShadowingTutor
                 return (false, true);  // Don't advance, but continue session (retry)
             }
 
-            // SCORING DECISION
-            if (ctx.accuracyPercent >= 65)
+            // SCORING DECISION - Only 100% advances (per new requirements)
+            if (ctx.accuracyPercent >= 100)
             {
-                // PASS: Advance to next topic
-                Debug.Log($"[ADVANCE] APPROVED - accuracy={ctx.accuracyPercent}% >= 65%. {ctx}");
+                // PERFECT: Advance to next topic
+                Debug.Log($"[ADVANCE] APPROVED - accuracy={ctx.accuracyPercent}% = 100%. {ctx}");
                 bool shouldContinue = CompleteTopicAndDecrementInternal();
                 return (true, shouldContinue);
             }
             else
             {
-                // FAIL: Stay on same topic, retry
-                Debug.Log($"[ADVANCE] DENIED - accuracy={ctx.accuracyPercent}% < 65%. Retry. {ctx}");
+                // NOT PERFECT: Stay on same topic, retry
+                // 65-99% = 1 TTS repeat, 0-64% = 3 TTS repeats (handled in feedback logic)
+                Debug.Log($"[ADVANCE] DENIED - accuracy={ctx.accuracyPercent}% < 100%. Retry. {ctx}");
                 return (false, true);  // Don't advance, continue session
             }
         }
@@ -1176,6 +1375,14 @@ namespace ShadowingTutor
             // FIRST LOG - confirms onClick listener was invoked
             UnityEngine.Debug.Log("[TutorRoom] *** BUTTON CLICKED *** OnMainButtonClick invoked!");
 
+            // CRITICAL: If HoldToRecordButton is present and recording was started,
+            // completely ignore this onClick - it's a stale event from the button release
+            if (_holdToRecordButton != null && _holdToRecordButton.WasRecordingStarted)
+            {
+                Debug.Log("[TutorRoom] onClick IGNORED - recording was started via hold-to-record");
+                return;
+            }
+
             // Debounce
             float now = Time.unscaledTime;
             if (now - _lastButtonPressTime < _buttonDebounceTime)
@@ -1203,7 +1410,12 @@ namespace ShadowingTutor
                     break;
 
                 case TutorState.Recording:
-                    StopRecording();
+                case TutorState.AwaitingQnA:
+                case TutorState.Feedback:
+                    // In press-and-hold mode, do NOT stop recording or advance on click
+                    // HoldToRecordButton handles start/stop via OnPointerDown/OnPointerUp
+                    // The onClick fires on release, but we've already stopped via OnPointerUp
+                    Debug.Log($"[TutorRoom] {_currentState} state - ignoring onClick (using press-and-hold)");
                     break;
 
                 default:
@@ -1350,6 +1562,9 @@ namespace ShadowingTutor
 
             // 6. Hide loading indicator
             ShowLoading(false);
+
+            // 6.5. Unlock input (remove blocker overlay)
+            SetInputLocked(false);
 
             // 7. Clear comparison panel
             ClearComparisonPanel();
@@ -1550,6 +1765,7 @@ namespace ShadowingTutor
 
                 // 2. Play season theme intro TTS using Grok for dynamic line
                 SetState(TutorState.SeasonIntro);
+                SetInputLocked(true, "답변중...");  // Lock during intro TTS
 
                 // Generate intro line LOCALLY (not via Grok) for reliable TTS
                 // Format: "안녕하세요! {greeting} 오늘 배울 주제는 "{seasonTitle}"이고 {topicCount}개의 표현을 배워볼거예요! 시작할게요!"
@@ -1583,11 +1799,13 @@ namespace ShadowingTutor
 
                     // A. Generate PROMPT via Grok (prompts user to listen and repeat)
                     SetState(TutorState.TopicPrompt);
+                    SetInputLocked(true, "생각중...");  // Lock during Grok generation
                     string promptLine = null;
                     yield return GenerateGrokLineAsync(GrokClient.TutorState.PROMPT, line => promptLine = line);
                     if (!IsSessionValid(mySessionVersion)) yield break;
 
                     if (DEV_VERBOSE) Debug.Log($"[SeasonProgress] Expression #{_currentExpressionIndex + 1}, remaining={_remainingTopics}");
+                    SetInputLocked(true, "답변중...");  // Lock during TTS playback
                     yield return PlayTtsAndWait(promptLine);
                     if (!IsSessionValid(mySessionVersion)) yield break;
 
@@ -1622,22 +1840,43 @@ namespace ShadowingTutor
                             yield break;
                         }
 
-                        // C. Start recording
+                        // C. Wait for user to start recording (press-and-hold mode)
                         yield return new WaitForSeconds(_delayBeforeRecording);
                         if (!IsSessionValid(mySessionVersion)) yield break;
 
-                        if (_hintText != null) _hintText.text = "따라 말해봐!";
+                        // Enable hold-to-record button and wait for user input
+                        if (_hintText != null) _hintText.text = "꾹 눌러서 따라 말해봐!";
                         SetState(TutorState.Recording);
+                        _waitingForUserRecord = true;
 
-                        bool recordingStarted = MicRecorder.Instance.StartRecording();
-                        if (!recordingStarted)
+                        // UNLOCK input for user recording
+                        SetInputLocked(false);
+                        if (_holdToRecordButton != null)
                         {
-                            Debug.LogError("[ATTEMPT] Failed to start recording");
-                            SetState(TutorState.Home);
-                            yield break;
+                            _holdToRecordButton.SetInteractable(true);
                         }
 
-                        // Wait for recording to complete (via callback) with watchdog
+                        // Wait for user to START recording (press and hold)
+                        float waitForUserTimeout = 60f;  // 60 seconds to start recording
+                        float waitElapsed = 0f;
+                        while (_waitingForUserRecord && waitElapsed < waitForUserTimeout && IsSessionValid(mySessionVersion))
+                        {
+                            yield return null;
+                            waitElapsed += Time.deltaTime;
+                        }
+                        if (!IsSessionValid(mySessionVersion)) yield break;
+
+                        // Check if timed out waiting for user
+                        if (_waitingForUserRecord)
+                        {
+                            Debug.Log("[ATTEMPT] User did not start recording in time");
+                            _waitingForUserRecord = false;
+                            if (_holdToRecordButton != null) _holdToRecordButton.SetInteractable(false);
+                            // Continue to retry loop - don't end session
+                            continue;
+                        }
+
+                        // User started recording - wait for recording to complete (via callback) with watchdog
                         float recordingWatchdog = 0f;
                         while (_currentState == TutorState.Recording && recordingWatchdog < 30f && IsSessionValid(mySessionVersion))
                         {
@@ -1645,6 +1884,13 @@ namespace ShadowingTutor
                             recordingWatchdog += Time.deltaTime;
                         }
                         if (!IsSessionValid(mySessionVersion)) yield break;
+
+                        // Disable hold-to-record button after recording
+                        if (_holdToRecordButton != null)
+                        {
+                            _holdToRecordButton.SetInteractable(false);
+                            _holdToRecordButton.ResetState();
+                        }
 
                         if (recordingWatchdog >= 30f)
                         {
@@ -1763,82 +2009,23 @@ namespace ShadowingTutor
 
                         if (shouldAdvance)
                         {
-                            // PASS or EXCELLENT: accuracy >= 65%
-                            bool isExcellent = attempt.accuracyPercent >= _accuracyCorrectThreshold;
+                            // === PERFECT (100%): Strong praise + Q&A opportunity + advance ===
+                            Debug.Log($"[ADVANCE] decision=PERFECT acc={attempt.accuracyPercent}%");
+                            SetInputLocked(true, "생각중...");  // Lock during Grok generation
+                            string perfectFeedback = null;
+                            yield return GenerateGrokLineAsync(GrokClient.TutorState.FEEDBACK_EXCELLENT, line => perfectFeedback = line);
+                            if (!IsSessionValid(mySessionVersion)) yield break;
 
-                            if (isExcellent)
-                            {
-                                // === EXCELLENT (>=90%): Strong praise + ask to move on ===
-                                Debug.Log($"[ADVANCE] decision=EXCELLENT acc={attempt.accuracyPercent}%");
-                                string excellentFeedback = null;
-                                yield return GenerateGrokLineAsync(GrokClient.TutorState.FEEDBACK_EXCELLENT, line => excellentFeedback = line);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
+                            SetInputLocked(true, "답변중...");  // Lock during TTS playback
+                            yield return PlayTtsAndWait(perfectFeedback);
+                            if (!IsSessionValid(mySessionVersion)) yield break;
 
-                                yield return PlayTtsAndWait(excellentFeedback);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
+                            // Q&A opportunity before advancing (will unlock input when entering AwaitingQnA)
+                            yield return QuestionAndAnswerFlow(mySessionVersion);
+                            if (!IsSessionValid(mySessionVersion)) yield break;
 
-                                // Wait for yes/no response with 5s timeout (default: YES)
-                                yield return WaitForYesNoResponse(5f);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                // For excellent, always advance (yes/no just affects messaging)
-                                int moveOnIntent = ParseYesNoIntent(_transcriptText_value);
-                                Debug.Log($"[ADVANCE] MoveOn intent={moveOnIntent} (1=yes, -1=no, 0=unclear)");
-
-                                // No extra retry for excellent - proceed to advance
-                                yield return new WaitForSeconds(_delayAfterFeedback);
-                                expressionCompleted = true;
-                            }
-                            else
-                            {
-                                // === PASS (65-89%): Praise + coaching + ask for polish ===
-                                Debug.Log($"[ADVANCE] decision=PASS acc={attempt.accuracyPercent}%");
-                                string passFeedback = null;
-                                yield return GenerateGrokLineAsync(GrokClient.TutorState.FEEDBACK_PASS, line => passFeedback = line);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                yield return PlayTtsAndWait(passFeedback);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                // Wait for yes/no: "한 번만 더 매끈하게 해볼까요?" (5s timeout, default YES)
-                                yield return WaitForYesNoResponse(5f);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                int polishIntent = ParseYesNoIntent(_transcriptText_value);
-                                Debug.Log($"[ADVANCE] Polish intent={polishIntent} (1=yes, -1=no, 0=unclear)");
-
-                                if (polishIntent != -1 && !attempt.extraGuidedRepeatDone)
-                                {
-                                    // YES or unclear: One extra guided repeat for polish
-                                    attempt.extraGuidedRepeatDone = true;
-                                    if (_hintText != null) _hintText.text = "한 번 더 들어봐~";
-                                    yield return PlayTtsAndWait(_currentExpression.korean);
-                                    if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                    // Do one more recording for polish (but advance regardless of result)
-                                    yield return new WaitForSeconds(_delayBeforeRecording);
-                                    if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                    if (_hintText != null) _hintText.text = "따라 말해봐!";
-                                    SetState(TutorState.Recording);
-                                    MicRecorder.Instance.StartRecording();
-
-                                    // Wait for polish recording (15s max)
-                                    float polishWatchdog = 0f;
-                                    while (_currentState == TutorState.Recording && polishWatchdog < 15f && IsSessionValid(mySessionVersion))
-                                    {
-                                        yield return null;
-                                        polishWatchdog += Time.deltaTime;
-                                    }
-                                    if (!IsSessionValid(mySessionVersion)) yield break;
-
-                                    // Brief pause after polish attempt
-                                    yield return new WaitForSeconds(1f);
-                                }
-
-                                yield return new WaitForSeconds(_delayAfterFeedback);
-                                expressionCompleted = true;
-                            }
+                            yield return new WaitForSeconds(_delayAfterFeedback);
+                            expressionCompleted = true;
 
                             Debug.Log($"[ADVANCE] Topic completed. shouldContinueSeason={shouldContinueSeason}");
 
@@ -1848,18 +2035,12 @@ namespace ShadowingTutor
                                 break;
                             }
 
-                            // Voice-driven continuation: ask user if they want to continue
-                            // This gives user a natural exit point after each sentence
-                            yield return VoiceDrivenContinuation(6f);
-                            if (!IsSessionValid(mySessionVersion)) yield break;
-
-                            // If we reach here, user chose POSITIVE (continue)
-                            // The loop will naturally advance to next expression
+                            // Continue to next expression (no extra prompt needed - Q&A already asked)
                         }
                         else
                         {
-                            // === FAIL: accuracy < 65% OR timeout/empty - RETRY ===
-                            Debug.Log($"[ADVANCE] decision=FAIL acc={attempt.accuracyPercent}% timeout={attempt.timedOut} empty={attempt.transcriptEmpty}");
+                            // === NOT PERFECT: Retry required ===
+                            Debug.Log($"[ADVANCE] decision=RETRY acc={attempt.accuracyPercent}% timeout={attempt.timedOut} empty={attempt.transcriptEmpty}");
 
                             // Check if we should skip after max retries
                             bool shouldSkip = IncrementRetryAndCheckSkip();
@@ -1868,6 +2049,7 @@ namespace ShadowingTutor
                             {
                                 // MAX RETRIES EXCEEDED - force advance via special handling
                                 Debug.Log($"[ADVANCE] MAX RETRIES ({MAX_RETRIES}) exceeded - forcing advance");
+                                SetInputLocked(true, "답변중...");  // Lock during TTS
                                 string skipFeedback = "괜찮아! 다음 문장으로 넘어갈게요.";
                                 yield return PlayTtsAndWait(skipFeedback);
                                 if (!IsSessionValid(mySessionVersion)) yield break;
@@ -1883,28 +2065,56 @@ namespace ShadowingTutor
                                     break;
                                 }
 
-                                // Voice-driven continuation after skip
-                                yield return VoiceDrivenContinuation(6f);
+                                // Q&A opportunity before next sentence
+                                yield return QuestionAndAnswerFlow(mySessionVersion);
                                 if (!IsSessionValid(mySessionVersion)) yield break;
                             }
                             else
                             {
-                                // Continue retrying - use Grok for fail feedback
+                                // 3-TIER RETRY LOGIC based on accuracy
                                 SetState(TutorState.RetryPrompt);
+                                SetInputLocked(true, "답변중...");  // Lock during TTS feedback
 
-                                string retryFeedback = null;
-                                yield return GenerateGrokLineAsync(GrokClient.TutorState.FEEDBACK_FAIL, line => retryFeedback = line);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
+                                if (attempt.accuracyPercent >= 65)
+                                {
+                                    // === PARTIAL (65-99%): Say correct sentence ONCE + try again ===
+                                    Debug.Log($"[RETRY] PARTIAL - acc={attempt.accuracyPercent}% - 1x TTS repeat");
+                                    string partialFeedback = "거의 맞았어요! 다시 한 번 들어봐요.";
+                                    yield return PlayTtsAndWait(partialFeedback);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
 
-                                yield return PlayTtsAndWait(retryFeedback);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
+                                    // Play correct sentence ONCE
+                                    if (_hintText != null) _hintText.text = "잘 들어봐~";
+                                    yield return PlayTtsAndWait(_currentExpression.korean);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
+                                }
+                                else
+                                {
+                                    // === FAIL (0-64%): "Listen 3 times" + play TTS 3x + try again ===
+                                    Debug.Log($"[RETRY] FAIL - acc={attempt.accuracyPercent}% - 3x TTS repeat");
+                                    string failFeedback = "다시 한 번 말해줄게요. 세 번 잘 듣고 따라해 봐!";
+                                    yield return PlayTtsAndWait(failFeedback);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
 
+                                    // Play correct sentence THREE times
+                                    if (_hintText != null) _hintText.text = "첫 번째~";
+                                    yield return PlayTtsAndWait(_currentExpression.korean);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
+                                    yield return new WaitForSeconds(0.5f);
+
+                                    if (_hintText != null) _hintText.text = "두 번째~";
+                                    yield return PlayTtsAndWait(_currentExpression.korean);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
+                                    yield return new WaitForSeconds(0.5f);
+
+                                    if (_hintText != null) _hintText.text = "세 번째~";
+                                    yield return PlayTtsAndWait(_currentExpression.korean);
+                                    if (!IsSessionValid(mySessionVersion)) yield break;
+                                }
+
+                                if (_hintText != null) _hintText.text = "이제 따라해 봐!";
+                                SetInputLocked(false);  // Unlock for user recording
                                 yield return new WaitForSeconds(0.3f);
-
-                                // Play target TTS once for retry
-                                if (_hintText != null) _hintText.text = "잘 들어봐~";
-                                yield return PlayTtsAndWait(_currentExpression.korean);
-                                if (!IsSessionValid(mySessionVersion)) yield break;
 
                                 // Loop back to recording - expressionCompleted stays false
                                 Debug.Log($"[ATTEMPT] Looping back for retry #{_retryCount + 1}");
@@ -1924,6 +2134,7 @@ namespace ShadowingTutor
                 // 4. Season complete (remaining reached 0) - use Grok for season end prompt
                 if (DEV_VERBOSE) Debug.Log($"[SeasonProgress] SEASON COMPLETE! announced={_announcedTotalTopics}, remaining={_remainingTopics}");
                 SetState(TutorState.SeasonEndPrompt);
+                SetInputLocked(true, "생각중...");  // Lock during Grok generation
 
                 // Use Grok for season end prompt (must end with "다음으로 넘길까요?")
                 string seasonEndLine = null;
@@ -1931,8 +2142,10 @@ namespace ShadowingTutor
                 if (!IsSessionValid(mySessionVersion)) yield break;
 
                 if (DEV_VERBOSE) Debug.Log($"[SeasonProgress] Season end prompt: {seasonEndLine}");
+                SetInputLocked(true, "답변중...");  // Lock during TTS
                 yield return PlayTtsAndWait(seasonEndLine);
                 if (!IsSessionValid(mySessionVersion)) yield break;
+                SetInputLocked(false);  // Unlock for user response
 
                 // Record user's response for YES/NO intent (with 8s auto-timeout to YES)
                 yield return new WaitForSeconds(_delayBeforeRecording);
@@ -1941,40 +2154,56 @@ namespace ShadowingTutor
                 // Clear current expression so ProcessRecordingCoroutine knows to skip feedback
                 _currentExpression = null;
 
-                if (_hintText != null) _hintText.text = "네 또는 아니요~";
-                SetState(TutorState.Recording);
-
-                bool yesNoRecordingStarted = MicRecorder.Instance.StartRecording();
-                if (!yesNoRecordingStarted)
+                // Check if already recording (e.g., user is using press-and-hold button)
+                bool alreadyRecording = MicRecorder.Instance != null && MicRecorder.Instance.IsRecording;
+                if (alreadyRecording || _currentState == TutorState.Recording)
                 {
-                    Debug.LogWarning("[TutorRoom] Failed to start recording for YES/NO - defaulting to YES");
-                    // Default to YES on failure
+                    if (DEV_VERBOSE) Debug.Log("[SeasonProgress] Already recording - waiting for existing recording");
+                    // Wait for existing recording to finish
+                    float waitElapsed = 0f;
+                    while (MicRecorder.Instance != null && MicRecorder.Instance.IsRecording && waitElapsed < 8f)
+                    {
+                        yield return null;
+                        waitElapsed += Time.deltaTime;
+                    }
                 }
                 else
                 {
-                    // Wait for recording with 8 second timeout
-                    float yesNoTimeout = 0f;
-                    while (_currentState == TutorState.Recording && yesNoTimeout < 8f && IsSessionValid(mySessionVersion))
-                    {
-                        yield return null;
-                        yesNoTimeout += Time.deltaTime;
-                    }
-                    if (!IsSessionValid(mySessionVersion)) yield break;
+                    if (_hintText != null) _hintText.text = "네 또는 아니요~";
+                    SetState(TutorState.Recording);
 
-                    if (yesNoTimeout >= 8f)
+                    bool yesNoRecordingStarted = MicRecorder.Instance.StartRecording();
+                    if (!yesNoRecordingStarted)
                     {
-                        if (DEV_VERBOSE) Debug.Log("[SeasonProgress] YES/NO timeout - defaulting to YES");
-                        MicRecorder.Instance?.StopRecordingGracefully();
+                        Debug.LogWarning("[TutorRoom] Failed to start recording for YES/NO - defaulting to YES");
+                        // Default to YES on failure
                     }
+                    else
+                    {
+                        // Wait for recording with 8 second timeout
+                        float yesNoTimeout = 0f;
+                        while (_currentState == TutorState.Recording && yesNoTimeout < 8f && IsSessionValid(mySessionVersion))
+                        {
+                            yield return null;
+                            yesNoTimeout += Time.deltaTime;
+                        }
+                        if (!IsSessionValid(mySessionVersion)) yield break;
 
-                    // Wait for STT with timeout
-                    float sttTimeout = 0f;
-                    while (_currentState == TutorState.Scoring && sttTimeout < 5f && IsSessionValid(mySessionVersion))
-                    {
-                        yield return null;
-                        sttTimeout += Time.deltaTime;
+                        if (yesNoTimeout >= 8f)
+                        {
+                            if (DEV_VERBOSE) Debug.Log("[SeasonProgress] YES/NO timeout - defaulting to YES");
+                            MicRecorder.Instance?.StopRecordingGracefully();
+                        }
+
+                        // Wait for STT with timeout
+                        float sttTimeout = 0f;
+                        while (_currentState == TutorState.Scoring && sttTimeout < 5f && IsSessionValid(mySessionVersion))
+                        {
+                            yield return null;
+                            sttTimeout += Time.deltaTime;
+                        }
+                        if (!IsSessionValid(mySessionVersion)) yield break;
                     }
-                    if (!IsSessionValid(mySessionVersion)) yield break;
                 }
 
                 // Parse YES/NO intent (timeout defaults to unclear -> YES)
@@ -2043,6 +2272,75 @@ namespace ShadowingTutor
 
         #endregion
 
+        #region Hold-to-Record Handlers
+
+        /// <summary>
+        /// Check if user is allowed to start recording (press-and-hold mode).
+        /// Called by HoldToRecordButton before starting recording.
+        /// </summary>
+        private bool CanUserStartRecording()
+        {
+            // Check state - must be in a recording-enabled state
+            bool isRecordingEnabledState = _currentState == TutorState.Recording ||
+                                           _currentState == TutorState.AwaitingQnA ||
+                                           _currentState == TutorState.Feedback;
+
+            if (!isRecordingEnabledState)
+            {
+                Debug.Log($"[HoldRecord] Wrong state for recording: {_currentState}");
+                return false;
+            }
+
+            // For practice Recording state, also check _waitingForUserRecord flag
+            if (_currentState == TutorState.Recording && !_waitingForUserRecord)
+            {
+                Debug.Log("[HoldRecord] Recording state but not waiting for user record");
+                return false;
+            }
+
+            // Check if AI is speaking (TTS playing)
+            if (TtsPlayer.Instance != null && TtsPlayer.Instance.IsPlaying)
+            {
+                Debug.Log("[HoldRecord] AI is speaking, cannot record");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Called when user starts holding the record button.
+        /// </summary>
+        private void OnHoldRecordStart()
+        {
+            Debug.Log("[HoldRecord] User started recording (hold)");
+
+            // Increment pipeline token to invalidate any stale callbacks from previous attempts
+            _recordingPipelineToken++;
+            Debug.Log($"[HoldRecord] Pipeline token now {_recordingPipelineToken}");
+
+            _waitingForUserRecord = false;  // No longer waiting - recording in progress
+
+            // Update UI
+            if (_hintText != null)
+            {
+                _hintText.text = "녹음 중... 놓으면 중지";
+            }
+        }
+
+        /// <summary>
+        /// Called when user releases the record button.
+        /// </summary>
+        private void OnHoldRecordStop()
+        {
+            Debug.Log("[HoldRecord] User stopped recording (release)");
+
+            // Recording will stop via MicRecorder, which triggers OnRecordingComplete
+            // State transition happens there
+        }
+
+        #endregion
+
         #region Grok Integration
 
         /// <summary>
@@ -2102,11 +2400,12 @@ namespace ShadowingTutor
             {
                 GrokClient.TutorState.INTRO => GrokClient.BuildIntroLine(_currentTopic?.topic ?? "한국어", _shuffledExpressions?.Count ?? 5),
                 GrokClient.TutorState.PROMPT => "자, 따라 해봐!",
-                GrokClient.TutorState.FEEDBACK_EXCELLENT => "정말 잘했어요! 완전 현지인 같아요! 다음 걸로 넘어가 볼까요?",
-                GrokClient.TutorState.FEEDBACK_PASS => "잘했어요! 거의 완벽해요! 한 번만 더 매끈하게 해볼까요?",
+                GrokClient.TutorState.FEEDBACK_EXCELLENT => "정말 잘했어요! 완전 현지인 같아요!",
+                GrokClient.TutorState.FEEDBACK_PASS => "잘했어요! 거의 완벽해요!",
                 GrokClient.TutorState.FEEDBACK_FAIL => "괜찮아요! 다시 한 번 해봐요. 제가 다시 읽어드릴게요.",
                 GrokClient.TutorState.RETRY => "다시 한 번 해봐요! 잘 들어봐요!",
                 GrokClient.TutorState.SEASON_END => "이번 시즌 끝! 잘했어요! 다음으로 넘길까요?",
+                GrokClient.TutorState.QUESTION_ANSWER => "그 문장은 이렇게 발음해요!",
                 _ => "계속할까요?"
             };
         }
@@ -2119,15 +2418,91 @@ namespace ShadowingTutor
         private bool _forceTtsComplete = false;
 
         /// <summary>
+        /// Sanitize text before TTS to remove internal tokens and artifacts.
+        /// Fix C: Never speak internal tokens like "MOVE_ON", "ANSWER", JSON, etc.
+        /// </summary>
+        private string SanitizeTtsText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            string result = text;
+
+            // If entire text is JSON, try to extract the "text" field
+            if (result.TrimStart().StartsWith("{") && result.TrimEnd().EndsWith("}"))
+            {
+                // Try to extract "text" field from JSON
+                int textIdx = result.IndexOf("\"text\"");
+                if (textIdx >= 0)
+                {
+                    int colonIdx = result.IndexOf(':', textIdx);
+                    int quoteStart = result.IndexOf('"', colonIdx + 1);
+                    if (quoteStart >= 0)
+                    {
+                        int quoteEnd = quoteStart + 1;
+                        while (quoteEnd < result.Length)
+                        {
+                            if (result[quoteEnd] == '"' && result[quoteEnd - 1] != '\\')
+                                break;
+                            quoteEnd++;
+                        }
+                        if (quoteEnd > quoteStart + 1)
+                        {
+                            result = result.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+                            result = result.Replace("\\\"", "\"").Replace("\\n", "\n");
+                        }
+                    }
+                }
+            }
+
+            // Remove ONLY control tokens as standalone words (not Korean text)
+            result = System.Text.RegularExpressions.Regex.Replace(result, @"\bMOVE_ON\b", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            result = System.Text.RegularExpressions.Regex.Replace(result, @"\bNEXT\b(?!\s*[\uAC00-\uD7A3])", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // Remove markdown code blocks only
+            result = result.Replace("```json", "").Replace("```", "");
+
+            // Clean up whitespace
+            result = System.Text.RegularExpressions.Regex.Replace(result, @"\s+", " ").Trim();
+
+            // If result became empty after cleaning, return a fallback
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                return "알겠어요!"; // "Got it!" - safe fallback
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Play TTS and wait for completion with robust timeout handling.
         /// CRITICAL: Must wait for audio to ACTUALLY finish before returning.
         /// Uses callback + isPlaying flag for completion detection.
+        /// FIX: Uses _speechSeq to prevent duplicate/stale TTS calls.
         /// </summary>
         private IEnumerator PlayTtsAndWait(string text)
         {
+            // Fix C: Sanitize text to remove internal tokens before TTS
+            text = SanitizeTtsText(text);
+
             string textPreview = text.Length > 30 ? text.Substring(0, 30) + "..." : text;
+
+            // CRITICAL: Increment speech sequence and capture it
+            // This allows us to ignore callbacks from previous/cancelled TTS
+            _speechSeq++;
+            int mySpeechSeq = _speechSeq;
+
+            // Guard against duplicate TTS calls - if already playing, stop previous first
+            if (_ttsInProgress && TtsPlayer.Instance != null && TtsPlayer.Instance.IsPlaying)
+            {
+                Debug.Log($"[TTS] Stopping previous TTS before starting new one (speechSeq={mySpeechSeq})");
+                TtsPlayer.Instance.StopTts();
+                yield return null; // Give one frame for cleanup
+            }
+
+            _ttsInProgress = true;
+
             int ttsId = TtsPlayer.Instance?.GetInstanceID() ?? 0;
-            Debug.Log($"[TTS] PlayTtsAndWait start id={ttsId} textLen={text.Length} text='{textPreview}' v={_sessionVersion}");
+            Debug.Log($"[TTS] PlayTtsAndWait start id={ttsId} speechSeq={mySpeechSeq} textLen={text.Length} text='{textPreview}' v={_sessionVersion}");
 
             _forceTtsComplete = false;
 
@@ -2190,9 +2565,10 @@ namespace ShadowingTutor
             ShowLoading(false);
 
             // PHASE 2: Wait for playback to complete
-            // Timeout = clip length + buffer, minimum 8s for short clips
-            float clipLen = TtsPlayer.Instance.CurrentClip?.length ?? 5f;
-            float playTimeout = Mathf.Max(clipLen + 3f, 8f);
+            // Timeout = clip length + generous buffer to NEVER cut off speech
+            // Min 30s to handle unknown clip lengths, max 120s safety cap
+            float clipLen = TtsPlayer.Instance.CurrentClip?.length ?? 10f;
+            float playTimeout = Mathf.Clamp(clipLen + 5f, 30f, 120f);
             float playElapsed = 0f;
 
             Debug.Log($"[TTS] playing id={ttsId} clipLen={clipLen:F1}s timeout={playTimeout:F1}s");
@@ -2229,12 +2605,21 @@ namespace ShadowingTutor
             else if (playElapsed >= playTimeout)
             {
                 Debug.LogWarning($"[TTS] timeout id={ttsId} elapsed={playElapsed:F1}s clipLen={clipLen:F1}s isPlaying={TtsPlayer.Instance?.IsPlaying}");
-                // DO NOT stop audio on timeout - it might still be playing correctly
-                // Just log and continue, the audio will finish naturally
+                // Force stop audio on timeout to unblock recording
+                TtsPlayer.Instance?.Stop();
             }
             else
             {
-                Debug.Log($"[TTS] done id={ttsId} elapsed={playElapsed:F1}s");
+                Debug.Log($"[TTS] done id={ttsId} speechSeq={mySpeechSeq} elapsed={playElapsed:F1}s");
+            }
+
+            // CRITICAL: Clear TTS in progress flag
+            _ttsInProgress = false;
+
+            // Check if this TTS was cancelled/superseded by a newer one
+            if (mySpeechSeq != _speechSeq)
+            {
+                Debug.LogWarning($"[TTS] STALE - speechSeq changed from {mySpeechSeq} to {_speechSeq}, ignoring completion");
             }
         }
 
@@ -2254,8 +2639,11 @@ namespace ShadowingTutor
 
         private void OnRecordingStart()
         {
-            // GUARD: Only show recording UI if actually in Recording state
-            if (_currentState != TutorState.Recording)
+            // GUARD: Only show recording UI in valid recording states
+            // Fix D: Allow AwaitingQnA and Feedback states (for Q&A recording)
+            if (_currentState != TutorState.Recording &&
+                _currentState != TutorState.AwaitingQnA &&
+                _currentState != TutorState.Feedback)
             {
                 Debug.LogWarning($"[REC] OnRecordingStart called but state is {_currentState} - ignoring UI update");
                 return;
@@ -2267,33 +2655,41 @@ namespace ShadowingTutor
                 _recordingIndicator.gameObject.SetActive(true);
                 _recordingIndicator.color = _buttonRecordingColor;
             }
-            if (_recordingProgress != null)
-            {
-                _recordingProgress.gameObject.SetActive(true);
-                _recordingProgress.value = 0;
-            }
+            // Progress bar permanently hidden - using press-and-hold recording
         }
 
         private void OnRecordingProgress(float progress)
         {
-            // GUARD: Only update recording progress if in Recording state
-            if (_currentState != TutorState.Recording)
-            {
-                return;  // Silent ignore - normal during state transitions
-            }
-
-            if (_recordingProgress != null)
-            {
-                _recordingProgress.value = progress;
-            }
+            // Progress bar permanently hidden - using press-and-hold recording
+            // No UI update needed
         }
 
         private void OnRecordingComplete(byte[] wavData)
         {
-            Debug.Log($"[TutorRoom] Recording complete: {wavData.Length} bytes");
+            Debug.Log($"[TutorRoom] Recording complete: {wavData.Length} bytes, state={_currentState}, qnaProcessing={_qnaProcessingInProgress}");
 
             if (_recordingIndicator != null) _recordingIndicator.gameObject.SetActive(false);
             if (_recordingProgress != null) _recordingProgress.gameObject.SetActive(false);
+
+            // Handle Q&A and Feedback states - just do STT and route to Grok Q&A
+            if (_currentState == TutorState.AwaitingQnA || _currentState == TutorState.Feedback)
+            {
+                // CRITICAL: Prevent duplicate processing
+                if (_qnaProcessingInProgress)
+                {
+                    Debug.LogWarning("[TutorRoom] Q&A processing already in progress - ignoring duplicate recording complete");
+                    return;
+                }
+
+                Debug.Log($"[TutorRoom] {_currentState} recording complete - processing as Q&A");
+                // Transition to AwaitingQnA if in Feedback (starts the Q&A loop)
+                if (_currentState == TutorState.Feedback)
+                {
+                    SetState(TutorState.AwaitingQnA);
+                }
+                StartCoroutine(ProcessQnARecordingCoroutine(wavData));
+                return;
+            }
 
             if (_currentState != TutorState.Recording)
             {
@@ -2301,9 +2697,12 @@ namespace ShadowingTutor
                 return;
             }
 
-            // CAPTURE session version and attempt context BEFORE starting async work
+            // CAPTURE session version, pipeline token, and attempt context BEFORE starting async work
             int capturedSessionVersion = _sessionVersion;
+            int capturedPipelineToken = _recordingPipelineToken;
             AttemptContext capturedAttempt = _currentAttempt;
+
+            Debug.Log($"[REC] Captured context: session={capturedSessionVersion}, pipeline={capturedPipelineToken}");
 
             // Start processing with captured context
             StartCoroutine(ProcessRecordingCoroutine(wavData, capturedSessionVersion, capturedAttempt));
@@ -2311,12 +2710,44 @@ namespace ShadowingTutor
 
         private void OnRecordingError(string error)
         {
-            Debug.LogError($"[ATTEMPT] Recording error: {error}");
-            if (_recordingIndicator != null) _recordingIndicator.gameObject.SetActive(false);
-            if (_recordingProgress != null) _recordingProgress.gameObject.SetActive(false);
+            Debug.LogWarning($"[ATTEMPT] Recording error: {error}");
+
+            // Check if this is a "too short" error - stay in recording state and show hint
+            bool isTooShort = error != null && error.Contains("too short");
+            bool isNoAudio = error != null && (error.Contains("no audio") || error.Contains("No audio"));
+
+            if (isTooShort)
+            {
+                // Stay in current recording state, just show a hint
+                Debug.Log("[ATTEMPT] Recording too short - prompting user to try again");
+                if (_hintText != null)
+                {
+                    _hintText.text = "조금 더 길게 눌러주세요!";  // "Please hold a bit longer!"
+                }
+                // Reset hold-to-record button to idle state - use ResetRecordingPipeline for consistency
+                ResetRecordingPipeline("too_short", keepAttemptCounters: true);
+                // Don't change state - allow user to try again
+                return;
+            }
+
+            // For "no audio captured" and other errors:
+            // Reset pipeline and stay in Recording state so user can immediately retry
+            if (isNoAudio)
+            {
+                Debug.Log("[ATTEMPT] No audio captured - prompting user to try again");
+                if (_hintText != null)
+                {
+                    _hintText.text = "마이크 가까이에서 다시 말해주세요!";  // "Please speak closer to the mic!"
+                }
+                ResetRecordingPipeline("no_audio", keepAttemptCounters: true);
+                // Stay in Recording state - allow immediate retry
+                return;
+            }
+
+            // For other errors: reset pipeline and go to Recording state for retry
+            Debug.Log($"[ATTEMPT] Recording error (general): {error}");
 
             // CRITICAL: Force accuracy to 0 on error
-            _transcriptText_value = "";
             _lastAttemptCorrect = false;
             _lastAccuracyPercent = 0;  // CRITICAL: Force 0, never inherit stale value
             _lastFeedback = null;
@@ -2329,12 +2760,207 @@ namespace ShadowingTutor
                 Debug.Log($"[ATTEMPT] Error updated context: {_currentAttempt}");
             }
 
-            SetState(TutorState.Home);
+            // Reset pipeline and allow immediate retry (don't go to Home)
+            ResetRecordingPipeline($"error:{error}", keepAttemptCounters: true);
+            if (_hintText != null)
+            {
+                _hintText.text = "다시 한 번 말해주세요!";  // "Please try again!"
+            }
+            // Stay in Recording state - the coroutine will continue waiting for user
         }
 
         #endregion
 
         #region API Processing
+
+        /// <summary>
+        /// Process Q&A recording: STT -> Grok -> TTS response.
+        /// Stays on same screen for follow-up questions.
+        /// Fix B: Uses _qnaProcessingInProgress flag to prevent duplicate processing.
+        /// CRITICAL: Input is FULLY LOCKED throughout entire pipeline (STT/Grok/TTS).
+        /// </summary>
+        private IEnumerator ProcessQnARecordingCoroutine(byte[] wavData)
+        {
+            // Prevent duplicate processing
+            if (_qnaProcessingInProgress)
+            {
+                Debug.Log("[PIPE] Already processing - skipping duplicate");
+                yield break;
+            }
+            _qnaProcessingInProgress = true;
+
+            Debug.Log("[PIPE] Release -> INPUT LOCKED (STT phase)");
+
+            // CRITICAL: Lock ALL input immediately - user cannot interact during processing
+            SetInputLocked(true, "인식중...");  // "Transcribing..."
+            ShowLoading(true);
+            if (_hintText != null) _hintText.text = "음성 변환 중...";  // "Transcribing..."
+
+            string sttError = null;
+            _rawTranscriptText = "";
+            _transcriptText_value = "";
+
+            yield return ApiClient.PostStt(
+                wavData,
+                "ko",
+                response =>
+                {
+                    if (response != null && !string.IsNullOrEmpty(response.text))
+                    {
+                        _rawTranscriptText = response.text;
+                        _transcriptText_value = TranscriptUtils.NormalizeTranscript(response.text);
+                        Debug.Log($"[Q&A STT] Transcript: '{_transcriptText_value}'");
+                    }
+                    else
+                    {
+                        Debug.Log("[Q&A STT] Empty response");
+                        _transcriptText_value = "";
+                    }
+                },
+                error =>
+                {
+                    sttError = error;
+                    Debug.LogWarning($"[Q&A STT] Error: {error}");
+                    _transcriptText_value = "";
+                }
+            );
+
+            ShowLoading(false);
+            Debug.Log($"[PIPE] STT ok: '{_transcriptText_value}'");
+
+            // If no transcript, prompt user to try again
+            if (string.IsNullOrEmpty(_transcriptText_value))
+            {
+                if (_hintText != null) _hintText.text = "잘 안 들렸어요. 다시 말해줘!";
+                SetInputLocked(false);  // Unlock input - allow user to try again
+                _qnaProcessingInProgress = false;
+                _qnaRoundComplete = true;  // Signal wait loop to continue
+                yield break;
+            }
+
+            // LOCAL INTENT CHECK: Only local classifier decides ADVANCE (not Grok)
+            var localIntent = TranscriptUtils.DetermineQnAIntent(_transcriptText_value);
+            Debug.Log($"[QNA] transcript: '{_transcriptText_value}'");
+            Debug.Log($"[QNA] intent: {localIntent}");
+
+            // If user clearly wants to advance (no more questions), speak line (3) and advance
+            if (localIntent == TranscriptUtils.QnAIntent.ADVANCE)
+            {
+                Debug.Log("[ADV] User wants to move on -> speak line (3) and advance");
+                if (_hintText != null) _hintText.text = "다음 주제로 넘어갈게요!";
+                SetInputLocked(true, "답변중...");  // Keep locked during TTS
+
+                // EXACT LINE (3): When user indicates no more questions
+                yield return PlayTtsAndWait("네 알겠어요! 그럼 다음 주제로 넘어가볼게요!");
+
+                // Signal Q&A done and advance - unlock happens in next state
+                _qnaDone = true;
+                _qnaRoundComplete = true;  // Signal wait loop to exit
+                ClearComparisonPanel();
+                SetState(TutorState.Feedback);
+                SetInputLocked(false);  // Unlock after TTS complete
+                _qnaProcessingInProgress = false;
+                yield break;
+            }
+
+            // Handle UNKNOWN (empty/too short): reprompt WITHOUT advancing
+            if (localIntent == TranscriptUtils.QnAIntent.UNKNOWN)
+            {
+                Debug.Log("[QNA] UNKNOWN -> reprompt (do NOT advance)");
+                SetInputLocked(true, "답변중...");  // Keep locked during TTS
+                // Re-speak appropriate prompt based on whether we already asked follow-up
+                if (_qnaFollowupPromptPlayed)
+                {
+                    // We're in AwaitMoreQnA state - re-speak line (2)
+                    yield return PlayTtsAndWait("또 다른 질문 있으신가요?");
+                }
+                else
+                {
+                    // We're in first Q&A prompt - re-speak line (1)
+                    yield return PlayTtsAndWait("혹시 방금 배우신 문장에 관해서 궁금하신 점이 있으신가요? 없으시면 넘어갈게요!");
+                }
+                if (_hintText != null) _hintText.text = "꾹 눌러 녹음";
+                SetState(TutorState.AwaitingQnA);
+                SetInputLocked(false);  // Unlock after TTS complete
+                _qnaProcessingInProgress = false;
+                _qnaRoundComplete = true;  // Signal wait loop to continue
+                yield break;
+            }
+
+            // ASK_QUESTION: Send to Grok for answer
+            Debug.Log("[QNA] Grok start");
+            SetInputLocked(true, "생각중...");  // Update message for Grok phase
+            if (_hintText != null) _hintText.text = "생각 중...";
+
+            string grokIntent = null;
+            string grokText = null;
+            bool grokFailed = false;
+
+            yield return HandleQnATurnAsync(_transcriptText_value, (intent, text) =>
+            {
+                grokIntent = intent;
+                grokText = text;
+            });
+
+            Debug.Log("[QNA] Grok end");
+
+            // Check for Grok failure (empty response or error)
+            if (string.IsNullOrEmpty(grokText) || grokText == "죄송해요, 다시 말해 주세요.")
+            {
+                grokFailed = true;
+                Debug.LogWarning("[QNA] Grok failed or returned fallback");
+            }
+            else
+            {
+                Debug.Log($"[QNA] Grok answer: {grokText.Substring(0, System.Math.Min(50, grokText.Length))}...");
+            }
+
+            // Speak Grok's response via TTS
+            if (!string.IsNullOrEmpty(grokText) && !grokFailed)
+            {
+                Debug.Log("[QNA] TTS start");
+                SetInputLocked(true, "답변중...");  // Update message for TTS phase
+                yield return PlayTtsAndWait(grokText);
+                Debug.Log("[QNA] TTS end");
+            }
+            else if (grokFailed)
+            {
+                // Grok failed - apologize and return to QnA prompt
+                Debug.Log("[QNA] Grok failed - apologizing and reprompting");
+                SetInputLocked(true, "답변중...");  // Keep locked during apology TTS
+                yield return PlayTtsAndWait("죄송해요, 잘 이해하지 못했어요.");
+                // Re-speak appropriate prompt
+                if (_qnaFollowupPromptPlayed)
+                {
+                    yield return PlayTtsAndWait("또 다른 질문 있으신가요?");
+                }
+                else
+                {
+                    yield return PlayTtsAndWait("혹시 방금 배우신 문장에 관해서 궁금하신 점이 있으신가요? 없으시면 넘어갈게요!");
+                }
+                if (_hintText != null) _hintText.text = "꾹 눌러 녹음";
+                SetState(TutorState.AwaitingQnA);
+                SetInputLocked(false);  // Unlock after TTS complete
+                _qnaProcessingInProgress = false;
+                _qnaRoundComplete = true;  // Signal wait loop to continue
+                yield break;
+            }
+
+            // After answering ONE question, speak EXACT LINE (2) and wait for more
+            // Do NOT advance - only advance when user explicitly says no more questions
+            Debug.Log("[QNA] TTS end -> speak line (2) and wait for more questions");
+
+            // EXACT LINE (2): After Grok answers one question
+            yield return PlayTtsAndWait("또 다른 질문 있으신가요?");
+
+            _qnaFollowupPromptPlayed = true;  // Mark that we've asked for more questions
+            if (_hintText != null) _hintText.text = "꾹 눌러 녹음";
+            SetState(TutorState.AwaitingQnA);
+            // Unlock input only after ALL TTS is complete
+            SetInputLocked(false);
+            _qnaProcessingInProgress = false;
+            _qnaRoundComplete = true;  // Signal wait loop to continue immediately
+        }
 
         private IEnumerator ProcessRecordingCoroutine(byte[] wavData, int capturedSessionVersion, AttemptContext ctx)
         {
@@ -2345,8 +2971,9 @@ namespace ShadowingTutor
                 yield break;
             }
 
-            // C. STT
+            // C. STT - Lock ALL input during scoring phase
             SetState(TutorState.Scoring);
+            SetInputLocked(true, "인식중...");  // Lock input during STT
             ShowLoading(true);
 
             string sttError = null;
@@ -2863,6 +3490,7 @@ namespace ShadowingTutor
 
             if (_tmpTargetSentence != null)
             {
+                ConfigureTMPAutoSize(_tmpTargetSentence);
                 _tmpTargetSentence.text = TextDiffHighlighter.BuildTargetRichText(targetSentence);
                 _tmpTargetSentence.richText = true;
                 _tmpTargetSentence.gameObject.SetActive(true);
@@ -2876,6 +3504,7 @@ namespace ShadowingTutor
 
             if (_tmpUserSentence != null)
             {
+                ConfigureTMPAutoSize(_tmpUserSentence);
                 string cleanUserTranscript = TranscriptUtils.NormalizeTranscript(userTranscript);
                 _tmpUserSentence.text = TextDiffHighlighter.BuildUserRichText(cleanUserTranscript, targetSentence);
                 _tmpUserSentence.richText = true;
@@ -2890,6 +3519,26 @@ namespace ShadowingTutor
                 _tmpAccuracyText.richText = true;
                 _tmpAccuracyText.gameObject.SetActive(true);
             }
+        }
+
+        /// <summary>
+        /// Configure TMP text component for auto-sizing to prevent overflow.
+        /// Called once when text is first set.
+        /// </summary>
+        private void ConfigureTMPAutoSize(TextMeshProUGUI tmp)
+        {
+            if (tmp == null) return;
+
+            // Enable auto-sizing
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMin = Math.Max(18, tmp.fontSize / 3);  // Readable minimum
+            tmp.fontSizeMax = tmp.fontSize;
+
+            // Enable word wrapping
+            tmp.enableWordWrapping = true;
+
+            // Use Ellipsis as fallback when text still overflows at min size
+            tmp.overflowMode = TextOverflowModes.Ellipsis;
         }
 
         /// <summary>
@@ -2960,9 +3609,14 @@ namespace ShadowingTutor
 
             // Add LayoutElement for proper sizing in VerticalLayoutGroup
             var layoutElement = go.AddComponent<UnityEngine.UI.LayoutElement>();
-            layoutElement.minHeight = fontSize * 1.2f;
-            layoutElement.preferredHeight = fontSize * 1.5f;
+            layoutElement.minHeight = fontSize * 0.8f;  // Reduced for auto-sizing
             layoutElement.flexibleWidth = 1f;
+            layoutElement.flexibleHeight = 1f;  // Allow height to grow with wrapped text
+
+            // Add ContentSizeFitter to size based on text content
+            var fitter = go.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            fitter.horizontalFit = UnityEngine.UI.ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
 
             // Add TextMeshProUGUI
             TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
@@ -2987,8 +3641,15 @@ namespace ShadowingTutor
             tmp.color = color;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.enableWordWrapping = true;
-            tmp.overflowMode = TextOverflowModes.Overflow;
             tmp.richText = true;  // REQUIRED for <color> tags
+
+            // Enable auto-sizing to fit long text inside panel
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMin = Math.Max(18, fontSize / 3);  // Readable minimum
+            tmp.fontSizeMax = fontSize;
+
+            // Use Ellipsis as fallback when text still overflows at min size
+            tmp.overflowMode = TextOverflowModes.Ellipsis;
 
             // Ensure text is visible
             tmp.enabled = true;
@@ -3253,6 +3914,20 @@ namespace ShadowingTutor
             // Clear previous transcript
             _transcriptText_value = "";
 
+            // Check if already in Recording state (e.g., user is using press-and-hold)
+            if (_currentState == TutorState.Recording || (MicRecorder.Instance != null && MicRecorder.Instance.IsRecording))
+            {
+                Debug.Log("[TutorRoom] WaitForYesNoResponse: Already recording - waiting for existing recording to complete");
+                // Wait for existing recording to finish instead of starting new one
+                float waitElapsed = 0f;
+                while (MicRecorder.Instance != null && MicRecorder.Instance.IsRecording && waitElapsed < timeoutSeconds)
+                {
+                    yield return null;
+                    waitElapsed += Time.deltaTime;
+                }
+                yield break;
+            }
+
             // Indicate we're waiting for response
             if (_hintText != null) _hintText.text = "네 또는 아니요~";
             SetState(TutorState.Recording);
@@ -3368,6 +4043,357 @@ namespace ShadowingTutor
         }
 
         /// <summary>
+        /// Q&A flow: Ask user if they have questions before advancing.
+        /// Grok decides intent (ANSWER vs MOVE_ON) - no manual keyword matching.
+        /// Fix B: Coordinates with ProcessQnARecordingCoroutine to avoid duplicate processing.
+        /// </summary>
+        private IEnumerator QuestionAndAnswerFlow(int sessionVersion)
+        {
+            Debug.Log("[QNA] EnterQnaLoop");
+
+            // Reset Q&A flags at start
+            _qnaDone = false;
+            _qnaProcessingInProgress = false;
+            _qnaFollowupPromptPlayed = false;
+            _qnaRoundComplete = false;
+
+            bool done = false;
+            int maxRounds = 1000; // Effectively unlimited - only exits on explicit ADVANCE
+            int round = 0;
+
+            while (!done && round < maxRounds && IsSessionValid(sessionVersion))
+            {
+                round++;
+
+                // Check if ADVANCE was detected by ProcessQnARecordingCoroutine
+                if (_qnaDone)
+                {
+                    Debug.Log("[QNA] ADVANCE already detected - exiting flow");
+                    done = true;
+                    break;
+                }
+
+                // Ask if user has questions (skip if ProcessQnARecordingCoroutine already prompted)
+                if (!_qnaFollowupPromptPlayed)
+                {
+                    Debug.Log("[QNA] Speaking EXACT LINE (1) - first Q&A prompt");
+                    // EXACT LINE (1): After practice result, before moving on
+                    yield return PlayTtsAndWait("혹시 방금 배우신 문장에 관해서 궁금하신 점이 있으신가요? 없으시면 넘어갈게요!");
+                    if (!IsSessionValid(sessionVersion)) yield break;
+                }
+                else
+                {
+                    Debug.Log("[QNA] Skipping prompt - already prompted by ProcessQnARecordingCoroutine");
+                    _qnaFollowupPromptPlayed = false;  // Reset for next round
+                }
+
+                // Check again after TTS
+                if (_qnaDone)
+                {
+                    Debug.Log("[QNA] ADVANCE detected during TTS - exiting flow");
+                    done = true;
+                    break;
+                }
+
+                // Wait for user to speak (press-and-hold)
+                if (_hintText != null) _hintText.text = "꾹 눌러 녹음";
+                SetState(TutorState.AwaitingQnA);
+
+                // UNLOCK input when entering AwaitingQnA - user can now record
+                SetInputLocked(false);
+                if (_holdToRecordButton != null) _holdToRecordButton.SetInteractable(true);
+                _transcriptText_value = "";
+
+                // Wait for recording and processing to complete
+                // Exits when: round complete, ADVANCE detected, timeout, or session invalid
+                _qnaRoundComplete = false;  // Reset for this round
+                float waitElapsed = 0f;
+                float waitTimeout = 30f; // 30 seconds to respond
+                while (_currentState == TutorState.AwaitingQnA &&
+                       waitElapsed < waitTimeout &&
+                       IsSessionValid(sessionVersion) &&
+                       !_qnaDone &&
+                       !_qnaRoundComplete)  // Exit immediately when round completes
+                {
+                    yield return null;
+                    waitElapsed += Time.deltaTime;
+                }
+                if (!IsSessionValid(sessionVersion)) yield break;
+
+                // Check if ADVANCE was processed
+                if (_qnaDone)
+                {
+                    Debug.Log("[QNA] ADVANCE processed by recording coroutine - exiting flow");
+                    done = true;
+                    break;
+                }
+
+                // Check if a round was completed (question answered or reprompted)
+                if (_qnaRoundComplete)
+                {
+                    Debug.Log("[QNA] Round complete - continuing loop for next question");
+                    _qnaRoundComplete = false;  // Reset for next round
+                    continue;  // Skip timeout handling, go to next round
+                }
+
+                // Wait for any in-progress processing to complete (shouldn't happen if _qnaRoundComplete works)
+                while (_qnaProcessingInProgress && IsSessionValid(sessionVersion))
+                {
+                    yield return null;
+                }
+                if (!IsSessionValid(sessionVersion)) yield break;
+
+                // Check again after processing
+                if (_qnaDone)
+                {
+                    Debug.Log("[QNA] ADVANCE detected after processing - exiting flow");
+                    done = true;
+                    break;
+                }
+
+                // Disable hold-to-record after capturing
+                if (_holdToRecordButton != null) _holdToRecordButton.SetInteractable(false);
+
+                // CRITICAL FIX: Timeout does NOT auto-advance!
+                // Instead, reprompt the user and continue the loop
+                if (waitElapsed >= waitTimeout)
+                {
+                    Debug.Log("[QNA] Timeout waiting for recording - reprompting (NOT advancing)");
+                    // Re-speak appropriate prompt based on state
+                    if (_qnaFollowupPromptPlayed)
+                    {
+                        // Already asked follow-up - speak line (2)
+                        yield return PlayTtsAndWait("또 다른 질문 있으신가요?");
+                    }
+                    else
+                    {
+                        // First prompt - speak line (1)
+                        yield return PlayTtsAndWait("혹시 방금 배우신 문장에 관해서 궁금하신 점이 있으신가요? 없으시면 넘어갈게요!");
+                    }
+                    continue; // Go to next round, NOT break/done
+                }
+
+                // State changed (recording was processed) - just loop back
+                Debug.Log($"[QNA] Round {round} complete, continuing QnA loop");
+            }
+
+            // Fix A: Hide comparison panel when exiting Q&A
+            ClearComparisonPanel();
+
+            Debug.Log("[QNA] Flow complete");
+            SetState(TutorState.Feedback);
+        }
+
+
+        /// <summary>
+        /// Handle a single Q&A turn: send transcript to Grok, get intent + response.
+        /// Grok returns JSON: {"intent":"ANSWER"|"MOVE_ON","text":"..."}
+        /// </summary>
+        private IEnumerator HandleQnATurnAsync(string userTranscript, Action<string, string> onComplete)
+        {
+            string topicName = _currentTopic?.topic ?? "한국어";
+            string currentSentence = _currentExpression?.korean ?? "";
+
+            // Build Q&A-specific Grok prompt
+            string systemPrompt = @"You are a friendly Korean tutor. The user just finished practicing a sentence.
+Decide if the user is asking a question OR wants to move to the next sentence.
+Return JSON ONLY (no markdown, no extra text):
+{""intent"":""ANSWER"",""text"":""your answer in Korean""}
+OR
+{""intent"":""MOVE_ON"",""text"":""short transition phrase in Korean""}
+
+If user says anything like 'next', 'no questions', 'move on', '다음', '없어', '괜찮아' -> MOVE_ON.
+Otherwise, answer their question helpfully in Korean.";
+
+            string userPrompt = $@"Topic: {topicName}
+Current sentence: {currentSentence}
+User said: ""{userTranscript}""";
+
+            Debug.Log($"[QNA] Sending to Grok: {userPrompt}");
+
+            string grokResponse = null;
+            string grokError = null;
+
+            // Use existing Grok API via backend
+            yield return CallGrokQnAAsync(systemPrompt, userPrompt,
+                response => grokResponse = response,
+                error => grokError = error);
+
+            // Parse JSON response
+            string intent = "ANSWER";
+            string text = "죄송해요, 다시 말해 주세요."; // Fallback
+
+            if (!string.IsNullOrEmpty(grokResponse))
+            {
+                try
+                {
+                    // Try to parse JSON
+                    var parsed = ParseQnAResponse(grokResponse);
+                    intent = parsed.intent;
+                    text = parsed.text;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[QNA] JSON parse failed: {ex.Message}, using raw response");
+                    // If parsing fails, treat entire response as answer text
+                    text = grokResponse;
+                }
+            }
+            else if (!string.IsNullOrEmpty(grokError))
+            {
+                Debug.LogWarning($"[QNA] Grok error: {grokError}");
+            }
+
+            onComplete?.Invoke(intent, text);
+        }
+
+        /// <summary>
+        /// Parse Grok Q&A JSON response.
+        /// </summary>
+        private (string intent, string text) ParseQnAResponse(string json)
+        {
+            // Clean up response - remove markdown code blocks if present
+            string cleaned = json.Trim();
+            if (cleaned.StartsWith("```"))
+            {
+                int start = cleaned.IndexOf('{');
+                int end = cleaned.LastIndexOf('}');
+                if (start >= 0 && end > start)
+                {
+                    cleaned = cleaned.Substring(start, end - start + 1);
+                }
+            }
+
+            // Simple JSON parsing (avoid external dependencies)
+            string intent = "ANSWER";
+            string text = "";
+
+            // Extract intent
+            int intentIdx = cleaned.IndexOf("\"intent\"");
+            if (intentIdx >= 0)
+            {
+                int colonIdx = cleaned.IndexOf(':', intentIdx);
+                int quoteStart = cleaned.IndexOf('"', colonIdx + 1);
+                int quoteEnd = cleaned.IndexOf('"', quoteStart + 1);
+                if (quoteStart >= 0 && quoteEnd > quoteStart)
+                {
+                    intent = cleaned.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+                }
+            }
+
+            // Extract text
+            int textIdx = cleaned.IndexOf("\"text\"");
+            if (textIdx >= 0)
+            {
+                int colonIdx = cleaned.IndexOf(':', textIdx);
+                int quoteStart = cleaned.IndexOf('"', colonIdx + 1);
+                if (quoteStart >= 0)
+                {
+                    // Find closing quote (handle escaped quotes)
+                    int quoteEnd = quoteStart + 1;
+                    while (quoteEnd < cleaned.Length)
+                    {
+                        if (cleaned[quoteEnd] == '"' && cleaned[quoteEnd - 1] != '\\')
+                            break;
+                        quoteEnd++;
+                    }
+                    if (quoteEnd > quoteStart + 1)
+                    {
+                        text = cleaned.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+                        // Unescape
+                        text = text.Replace("\\\"", "\"").Replace("\\n", "\n");
+                    }
+                }
+            }
+
+            return (intent.ToUpper(), text);
+        }
+
+        /// <summary>
+        /// Call Grok API for Q&A (uses backend /api/grok endpoint).
+        /// </summary>
+        private IEnumerator CallGrokQnAAsync(string systemPrompt, string userPrompt, Action<string> onSuccess, Action<string> onError)
+        {
+            string baseUrl = AppConfig.Instance?.BackendBaseUrl;
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                onError?.Invoke("Backend URL not configured");
+                yield break;
+            }
+
+            string grokUrl = baseUrl + "/api/grok";
+
+            // Build request matching existing GrokClient format
+            var request = new
+            {
+                messages = new[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt }
+                }
+            };
+
+            string jsonBody = JsonUtility.ToJson(new GrokQnARequest
+            {
+                messages = new GrokQnAMessage[]
+                {
+                    new GrokQnAMessage { role = "system", content = systemPrompt },
+                    new GrokQnAMessage { role = "user", content = userPrompt }
+                }
+            });
+
+            Debug.Log($"[QNA] POST {grokUrl}");
+
+            using (UnityWebRequest www = new UnityWebRequest(grokUrl, "POST"))
+            {
+                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
+                www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                www.downloadHandler = new DownloadHandlerBuffer();
+                www.SetRequestHeader("Content-Type", "application/json");
+                www.timeout = 30;  // Increased timeout for Grok LLM responses
+
+                yield return www.SendWebRequest();
+
+                if (www.result != UnityWebRequest.Result.Success)
+                {
+                    onError?.Invoke(www.error);
+                    yield break;
+                }
+
+                try
+                {
+                    string responseText = www.downloadHandler.text;
+                    var parsed = JsonUtility.FromJson<GrokQnAResponse>(responseText);
+                    onSuccess?.Invoke(parsed?.tutorLine ?? responseText);
+                }
+                catch (Exception ex)
+                {
+                    onError?.Invoke(ex.Message);
+                }
+            }
+        }
+
+        // Helper classes for Q&A Grok request/response
+        [Serializable]
+        private class GrokQnARequest
+        {
+            public GrokQnAMessage[] messages;
+        }
+
+        [Serializable]
+        private class GrokQnAMessage
+        {
+            public string role;
+            public string content;
+        }
+
+        [Serializable]
+        private class GrokQnAResponse
+        {
+            public string tutorLine;
+        }
+
+        /// <summary>
         /// Voice-driven continuation flow after sentence study completes.
         /// Asks "다음으로 넘어가볼까요?" and processes user's spoken response.
         /// </summary>
@@ -3400,6 +4426,27 @@ namespace ShadowingTutor
             {
                 // Clear previous transcript
                 _transcriptText_value = "";
+
+                // Check if already recording (e.g., user is using press-and-hold button)
+                bool alreadyRecording = MicRecorder.Instance != null && MicRecorder.Instance.IsRecording;
+                if (alreadyRecording || _currentState == TutorState.Recording)
+                {
+                    Debug.Log("[VoiceDecision] Already recording - waiting for existing recording to complete");
+                    // Wait for existing recording to finish
+                    float waitElapsed = 0f;
+                    while (MicRecorder.Instance != null && MicRecorder.Instance.IsRecording && waitElapsed < timeoutSeconds)
+                    {
+                        yield return null;
+                        waitElapsed += Time.deltaTime;
+                    }
+                    // Use transcript from existing recording
+                    decision = ClassifyVoiceDecision(_transcriptText_value);
+                    Debug.Log($"[VoiceDecision] Using existing recording transcript -> decision={decision}");
+                    decisionMade = (decision != VoiceDecision.Unknown);
+                    if (decisionMade) break;
+                    // If unknown, continue to reprompt logic below
+                    continue;
+                }
 
                 // Indicate listening state
                 if (_hintText != null) _hintText.text = "네 또는 아니요~";
@@ -3588,11 +4635,15 @@ namespace ShadowingTutor
         private void OnTtsLoadComplete()
         {
             ShowLoading(false);
+            // Fix B: Update button visibility when TTS starts playing
+            UpdateButtonUI();
         }
 
         private void OnTtsPlaybackComplete()
         {
             // Handled by PlayTtsAndWait coroutine
+            // Fix B: Update button visibility when TTS stops playing
+            UpdateButtonUI();
         }
 
         private void OnTtsError(string error)

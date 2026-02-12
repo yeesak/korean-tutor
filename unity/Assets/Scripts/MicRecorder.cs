@@ -66,10 +66,12 @@ namespace ShadowingTutor
         {
             if (_instance != null && _instance != this)
             {
+                Debug.LogWarning($"[MicRecorder] Duplicate instance detected! Existing={_instance.GetInstanceID()}, Destroying={GetInstanceID()}");
                 Destroy(gameObject);
                 return;
             }
             _instance = this;
+            Debug.Log($"[MicRecorder] Singleton initialized. InstanceID={GetInstanceID()}");
 
             // Use AppConfig settings if available
             if (AppConfig.Instance != null)
@@ -334,6 +336,16 @@ namespace ShadowingTutor
                 float duration = Time.time - _recordingStartTime;
                 Debug.Log($"[MicRecorder] Finalizing recording. Duration: {duration:F1}s, Samples: {position}");
 
+                // GUARD: Check minimum recording duration to avoid "audio_too_short" errors
+                const float MIN_DURATION_SECONDS = 0.5f;
+                if (duration < MIN_DURATION_SECONDS)
+                {
+                    Debug.LogWarning($"[MicRecorder] Recording too short ({duration:F2}s < {MIN_DURATION_SECONDS}s) - please hold longer");
+                    lock (_stateLock) { _state = RecordingState.Idle; }
+                    OnRecordingError?.Invoke("Recording too short - hold longer");
+                    return;
+                }
+
                 // Extract samples (must be on main thread)
                 float[] samples = new float[position];
                 _recordingClip.GetData(samples, 0);
@@ -341,6 +353,16 @@ namespace ShadowingTutor
                 // Encode to WAV
                 byte[] wavData = WavEncoder.Encode(samples, _sampleRate);
                 Debug.Log($"[MicRecorder] WAV encoded: {wavData.Length} bytes");
+
+                // GUARD: Check minimum WAV size (header is 44 bytes, need actual audio data)
+                const int MIN_WAV_BYTES = 2000;
+                if (wavData.Length < MIN_WAV_BYTES)
+                {
+                    Debug.LogWarning($"[MicRecorder] WAV too small ({wavData.Length} bytes) - please hold longer");
+                    lock (_stateLock) { _state = RecordingState.Idle; }
+                    OnRecordingError?.Invoke("Recording too short - hold longer");
+                    return;
+                }
 
                 lock (_stateLock) { _state = RecordingState.Idle; }
 
