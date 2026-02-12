@@ -149,14 +149,16 @@ namespace ShadowingTutor.Editor
                             wasFixed = true;
                         }
 
-                        // Fix alpha (set to 0.1 for transparency)
-                        if (currentAlpha > 0.2f)
+                        // ALWAYS force alpha to 0.1 for transparency
                         {
                             Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
                             color.a = 0.1f;
                             mat.SetColor("_Color", color);
-                            fixDetails.Add($"Set _Color.a from {currentAlpha} to 0.1");
-                            wasFixed = true;
+                            if (currentAlpha != 0.1f)
+                            {
+                                fixDetails.Add($"Set _Color.a from {currentAlpha} to 0.1");
+                                wasFixed = true;
+                            }
                         }
 
                         // Fix missing _MainTex - assign transparent texture
@@ -165,6 +167,18 @@ namespace ShadowingTutor.Editor
                             mat.SetTexture("_MainTex", transparentTex);
                             fixDetails.Add($"Assigned transparent texture to _MainTex");
                             wasFixed = true;
+                        }
+
+                        // Also set _BaseMap for URP compatibility
+                        if (mat.HasProperty("_BaseMap"))
+                        {
+                            Texture baseMap = mat.GetTexture("_BaseMap");
+                            if (baseMap == null)
+                            {
+                                mat.SetTexture("_BaseMap", transparentTex);
+                                fixDetails.Add($"Assigned transparent texture to _BaseMap");
+                                wasFixed = true;
+                            }
                         }
 
                         // Set specular properties for wet eye look

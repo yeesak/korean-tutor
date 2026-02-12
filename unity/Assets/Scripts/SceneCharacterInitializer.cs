@@ -200,6 +200,24 @@ namespace ShadowingTutor
             }
         }
 
+        // Cached transparent texture for cornea materials
+        private static Texture2D _transparentTexture;
+
+        /// <summary>
+        /// Gets or creates a 1x1 fully transparent texture for cornea materials.
+        /// </summary>
+        private static Texture2D GetTransparentTexture()
+        {
+            if (_transparentTexture == null)
+            {
+                _transparentTexture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
+                _transparentTexture.SetPixel(0, 0, new Color(1f, 1f, 1f, 0f)); // Fully transparent white
+                _transparentTexture.Apply();
+                _transparentTexture.name = "RuntimeTransparent1x1";
+            }
+            return _transparentTexture;
+        }
+
         /// <summary>
         /// Ensures cornea materials are properly transparent so iris/pupil is visible.
         /// </summary>
@@ -217,13 +235,31 @@ namespace ShadowingTutor
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = 3000;
 
+            // CRITICAL: Ensure _MainTex is never null - use transparent texture
+            if (mat.HasProperty("_MainTex"))
+            {
+                Texture currentTex = mat.GetTexture("_MainTex");
+                if (currentTex == null)
+                {
+                    mat.SetTexture("_MainTex", GetTransparentTexture());
+                    Debug.Log($"[SceneInit] Assigned transparent texture to cornea: {mat.name}");
+                }
+            }
+
+            // Also set _BaseMap for URP compatibility
+            if (mat.HasProperty("_BaseMap"))
+            {
+                Texture currentTex = mat.GetTexture("_BaseMap");
+                if (currentTex == null)
+                {
+                    mat.SetTexture("_BaseMap", GetTransparentTexture());
+                }
+            }
+
             // Ensure low alpha (0.1 = 90% transparent)
             Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
-            if (color.a > 0.2f)
-            {
-                color.a = 0.1f;
-                mat.SetColor("_Color", color);
-            }
+            color.a = 0.1f; // Always force to 0.1, not just if > 0.2
+            mat.SetColor("_Color", color);
 
             // Set high glossiness for wet eye look
             mat.SetFloat("_Glossiness", 0.9f);
