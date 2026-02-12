@@ -69,8 +69,15 @@ namespace ShadowingTutor
             }
         }
 
-        private void Update()
+        private void LateUpdate()
         {
+            // Skip if TtsLipSyncRuntime is handling lip sync
+            if (TtsLipSyncRuntime.Instance != null && TtsLipSyncRuntime.Instance.ttsSource != null &&
+                TtsLipSyncRuntime.Instance.ttsSource.isPlaying)
+            {
+                return;
+            }
+
             // Smooth interpolation to target
             _currentOpenAmount = Mathf.Lerp(_currentOpenAmount, _targetOpenAmount, Time.deltaTime * _responsiveness);
 

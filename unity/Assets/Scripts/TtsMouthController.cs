@@ -261,6 +261,13 @@ namespace ShadowingTutor
         /// </summary>
         private void LateUpdate()
         {
+            // Yield to TtsLipSyncRuntime if it's active and handling lip sync
+            if (TtsLipSyncRuntime.Instance != null && TtsLipSyncRuntime.Instance.ttsSource != null &&
+                TtsLipSyncRuntime.Instance.ttsSource.isPlaying)
+            {
+                return;
+            }
+
             // Get RMS from TTS audio source (this also fills _audioSamples for ZCR)
             float rms = GetCurrentRms();
             _lastRms = rms;
