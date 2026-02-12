@@ -42,6 +42,10 @@ namespace ShadowingTutor
         public bool enableVisemeVariation = true;
         [Range(1f, 10f)] public float visemeSwitchHz = 3.5f;
 
+        [Header("Teeth Driver")]
+        [Tooltip("Optional teeth driver. If null, auto-finds TtsTeethDriver.Instance.")]
+        [SerializeField] private TtsTeethDriver teethDriver;
+
         [Header("Diagnostics")]
         public bool verbose = true;
 
@@ -375,6 +379,9 @@ namespace ShadowingTutor
                 // Apply to jaw as supplementary motion
                 ApplyJaw(_open);
 
+                // Apply to teeth (uses same open value for sync)
+                ApplyTeeth(_open, true);
+
                 // 1Hz diagnostics
                 _logTimer += Time.deltaTime;
                 if (verbose && _logTimer >= 1f)
@@ -403,6 +410,7 @@ namespace ShadowingTutor
                 _open = SmoothTo(_open, _openTarget, attack, release);
                 ApplyMouth(_open * (maxOpenWeight / 100f), false);
                 ApplyJaw(_open);
+                ApplyTeeth(_open, false);
             }
         }
 
@@ -472,6 +480,21 @@ namespace ShadowingTutor
             float angle = openNormalized * maxAngle;
 
             _jawBone.localRotation = _jawBaseRotation * Quaternion.AngleAxis(angle, Vector3.right);
+        }
+
+        void ApplyTeeth(float openNormalized, bool speaking)
+        {
+            // Use serialized reference or singleton
+            TtsTeethDriver driver = teethDriver;
+            if (driver == null)
+            {
+                driver = TtsTeethDriver.Instance;
+            }
+
+            if (driver != null)
+            {
+                driver.SetOpen(openNormalized, speaking);
+            }
         }
 
         static void SetBlendShape(SkinnedMeshRenderer r, int idx, float weight)
