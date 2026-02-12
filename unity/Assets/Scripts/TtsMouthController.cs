@@ -113,6 +113,10 @@ namespace ShadowingTutor
         private float _lastRms = 0f;
         private float _audioBrightness = 0f;
 
+        // Diagnostic logging (1Hz rate limit)
+        private float _lastDiagnosticLogTime = 0f;
+        private const float DiagnosticLogInterval = 1f;
+
         // Singleton for easy access
         private static TtsMouthController _instance;
         public static TtsMouthController Instance => _instance;
@@ -268,8 +272,18 @@ namespace ShadowingTutor
             // Calculate audio brightness (average absolute derivative)
             _audioBrightness = GetAudioBrightness();
 
-            // Determine speaking state
-            bool speaking = _ttsAudioSource != null && _ttsAudioSource.isPlaying && rms > _noiseGate;
+            // Determine speaking state - CRITICAL: use isPlaying ONLY, not RMS level
+            // RMS can drop to zero during quiet portions but we must keep animating
+            bool speaking = _ttsAudioSource != null &&
+                            _ttsAudioSource.isPlaying &&
+                            _ttsAudioSource.clip != null;
+
+            // 1Hz diagnostic logging while speaking
+            if (speaking && Time.time - _lastDiagnosticLogTime >= DiagnosticLogInterval)
+            {
+                _lastDiagnosticLogTime = Time.time;
+                Debug.Log($"[TTS-Lips] t={Time.time:F1} isPlaying={_ttsAudioSource.isPlaying} rms={rms:F4} open={_currentOpenAmount:F2}");
+            }
 
             // Handle state transitions
             if (speaking != _wasSpeaking)
@@ -283,11 +297,21 @@ namespace ShadowingTutor
             // Use viseme-based lip animation if available
             if (_enableVisemes && _hasVisemes && speaking)
             {
+                // Use procedural fallback RMS when actual RMS is below noise gate but audio is playing
+                // This ensures mouth keeps moving during quiet portions
+                float effectiveRms = rms;
+                if (rms < _noiseGate)
+                {
+                    // Generate subtle procedural movement based on time
+                    float proceduralBase = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f; // 0-1
+                    effectiveRms = _noiseGate + proceduralBase * 0.03f; // Low but above gate
+                }
+
                 // Check if enough time has passed for viseme switch
                 float timeSinceLastSwitch = Time.time - _lastVisemeSwitchTime;
                 if (timeSinceLastSwitch >= _nextVisemeSwitchInterval)
                 {
-                    _targetViseme = SelectVisemeFromAudio(rms, zcr);
+                    _targetViseme = SelectVisemeFromAudio(effectiveRms, zcr);
 
                     if (_targetViseme != _currentViseme)
                     {
@@ -299,7 +323,7 @@ namespace ShadowingTutor
                 }
 
                 // Update viseme weights with smooth transitions
-                UpdateVisemeWeights(_currentViseme, rms);
+                UpdateVisemeWeights(_currentViseme, effectiveRms);
             }
             else if (!speaking && _hasVisemes)
             {
@@ -308,8 +332,15 @@ namespace ShadowingTutor
             }
             else if (_enableVisemes && _hasLipBones && speaking)
             {
+                // Use procedural fallback RMS for lip bones too
+                float effectiveRms = rms;
+                if (rms < _noiseGate)
+                {
+                    float proceduralBase = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
+                    effectiveRms = _noiseGate + proceduralBase * 0.03f;
+                }
                 // Use lip bone fallback
-                UpdateLipBones(rms, zcr);
+                UpdateLipBones(effectiveRms, zcr);
             }
             else if (!speaking && _hasLipBones)
             {
@@ -317,13 +348,21 @@ namespace ShadowingTutor
             }
 
             // Calculate target open amount for jaw
-            if (rms < _noiseGate)
+            // When speaking, use effectiveRms to keep jaw moving even during quiet portions
+            float jawRms = rms;
+            if (speaking && rms < _noiseGate)
+            {
+                float proceduralBase = (Mathf.Sin(Time.time * 6f) + 1f) * 0.5f;
+                jawRms = _noiseGate + proceduralBase * 0.03f;
+            }
+
+            if (jawRms < _noiseGate)
             {
                 _targetOpenAmount = 0f;
             }
             else
             {
-                _targetOpenAmount = Mathf.Clamp01((rms - _noiseGate) * _sensitivity);
+                _targetOpenAmount = Mathf.Clamp01((jawRms - _noiseGate) * _sensitivity);
             }
 
             // Smooth interpolation
@@ -502,6 +541,29 @@ namespace ShadowingTutor
                 }
             }
             _disabledControllers.Clear();
+        }
+
+        /// <summary>
+        /// Explicitly set the audio source for lip sync.
+        /// Call this before starting playback for reliable binding.
+        /// </summary>
+        public void SetSource(AudioSource source)
+        {
+            if (source == null)
+            {
+                Debug.LogWarning("[TTS-Lips] SetSource called with null source");
+                return;
+            }
+
+            _ttsAudioSource = source;
+
+            // Ensure face renderer renders even when off-screen (for viseme updates)
+            if (_faceRenderer != null)
+            {
+                _faceRenderer.updateWhenOffscreen = true;
+            }
+
+            Debug.Log($"[TTS-Lips] SetSource bound to {source.gameObject.name}");
         }
 
         public void AutoWireAll()
@@ -702,6 +764,9 @@ namespace ShadowingTutor
 
             if (_faceRenderer != null)
             {
+                // CRITICAL: Ensure blendshapes update even when character is off-screen
+                _faceRenderer.updateWhenOffscreen = true;
+
                 string meshName = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.name : "null";
                 int blendCount = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.blendShapeCount : 0;
 

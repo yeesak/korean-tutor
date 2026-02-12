@@ -429,6 +429,9 @@ namespace ShadowingTutor
 
                 Debug.Log($"[TTS] start playId={myPlayId} v={genId} clipLen={clipDuration:F2}s dspStart={_dspStart:F2} expectedEnd={_expectedEnd:F2}");
 
+                // Bind audio source to lip sync controller before play
+                TtsMouthController.Instance?.SetSource(_audioSource);
+
                 _audioSource.Play();
 
                 // Wait for clip to finish using DSP time
