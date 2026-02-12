@@ -1,12 +1,10 @@
-using System;
-using System.Linq;
 using UnityEngine;
 
 namespace ShadowingTutor
 {
     /// <summary>
-    /// Drives teeth/jaw movement synced to TTS mouth open value.
-    /// GUARANTEED to produce visible motion via transform fallback even if no blendshapes exist.
+    /// Drives teeth/jaw movement VERTICALLY ONLY (no sideways motion).
+    /// Uses either local Y translation OR pitch rotation around local X.
     /// Called from TtsLipSyncRuntime every LateUpdate.
     /// </summary>
     public class TtsTeethDriver : MonoBehaviour
@@ -14,35 +12,36 @@ namespace ShadowingTutor
         private static TtsTeethDriver _instance;
         public static TtsTeethDriver Instance => _instance;
 
-        [Header("References")]
-        [Tooltip("CharacterModel root")]
-        public Transform characterRoot;
+        [Header("Assign explicitly in Inspector (or auto-finds)")]
+        [Tooltip("Drag the LOWER teeth transform if it exists. If not, drag the Jaw bone transform.")]
+        public Transform lowerTeethOrJaw;
 
-        [Tooltip("CC_Base_Teeth SkinnedMeshRenderer (assign in Inspector or auto-finds)")]
-        public SkinnedMeshRenderer teethRenderer;
+        [Header("Vertical-only motion (LOCAL Y translation)")]
+        [Tooltip("Maximum vertical opening distance in LOCAL Y units. Typical range: 0.0015 ~ 0.004")]
+        public float maxLocalYOpen = 0.0030f;
 
-        [Tooltip("Jaw OR lower-teeth transform to move (assign in Inspector or auto-finds)")]
-        public Transform jawOrLowerTeethTransform;
+        [Tooltip("If true, opening moves +Y; if false, opening moves -Y (most rigs need -Y).")]
+        public bool openMovesPositiveY = false;
 
-        [Header("Runtime")]
+        [Tooltip("Smoothing speed (higher = snappier).")]
+        public float smooth = 22f;
+
+        [Header("Optional: use pitch-only jaw rotation instead")]
+        [Tooltip("If true, use rotation instead of translation")]
+        public bool usePitchRotationInstead = false;
+
+        [Tooltip("Maximum jaw pitch in degrees for open. Typical 6~12.")]
+        public float maxPitchOpenDeg = 9f;
+
+        [Tooltip("If true, open rotates +X; if false, open rotates -X.")]
+        public bool openPitchPositiveX = true;
+
+        [Header("Diagnostics")]
         public bool verbose = true;
-        public float smooth = 20f;
 
-        [Header("Fallback Transform Motion (GUARANTEED Visible)")]
-        [Tooltip("Local position offset when mouth fully open")]
-        public Vector3 jawLocalPosOpen = new Vector3(0f, -0.0028f, 0f);
-
-        [Tooltip("Local rotation offset (degrees) when mouth fully open")]
-        public Vector3 jawLocalRotOpen = new Vector3(7.5f, 0f, 0f);
-
-        [Header("Blendshape Search Keywords")]
-        public string[] openKeywords = new[] { "jaw", "open", "mouth", "teeth" };
-
-        int _openBlendshape = -1;
-        Vector3 _jawPosBase;
-        Quaternion _jawRotBase;
-        bool _hasJawBase;
-
+        Vector3 _baseLocalPos;
+        Quaternion _baseLocalRot;
+        bool _hasBase;
         float _openSmoothed;
         float _logT;
 
@@ -56,252 +55,201 @@ namespace ShadowingTutor
             }
             _instance = this;
 
-            if (characterRoot == null)
+            // Auto-find if not assigned
+            if (lowerTeethOrJaw == null)
             {
-                characterRoot = FindCharacterRoot();
+                lowerTeethOrJaw = FindLowerTeethOrJaw();
             }
 
-            // Auto-find teeth renderer if not set
-            if (teethRenderer == null && characterRoot != null)
+            if (lowerTeethOrJaw == null)
             {
-                teethRenderer = characterRoot
-                    .GetComponentsInChildren<SkinnedMeshRenderer>(true)
-                    .FirstOrDefault(r => r != null &&
-                        ((r.name ?? "").ToLowerInvariant().Contains("teeth") ||
-                         (r.sharedMesh != null && (r.sharedMesh.name ?? "").ToLowerInvariant().Contains("teeth"))));
+                Debug.LogError("[TTS-Teeth] lowerTeethOrJaw is NULL. Assign LowerTeeth or Jaw transform in Inspector.");
+                return;
             }
 
-            // Auto-find jaw if not set
-            if (jawOrLowerTeethTransform == null && characterRoot != null)
-            {
-                // First try to find explicit jaw bone
-                jawOrLowerTeethTransform = characterRoot
-                    .GetComponentsInChildren<Transform>(true)
-                    .FirstOrDefault(t => t != null &&
-                        (t.name ?? "").ToLowerInvariant().Contains("jaw"));
-
-                // Fallback to CC_Base_Teeth transform itself (GUARANTEED visible if we move it)
-                if (jawOrLowerTeethTransform == null && teethRenderer != null)
-                {
-                    jawOrLowerTeethTransform = teethRenderer.transform;
-                    if (verbose)
-                    {
-                        Debug.Log($"[TTS-Teeth] No jaw bone found. Using teeth renderer transform as fallback: {teethRenderer.name}");
-                    }
-                }
-            }
-
-            // Cache base transform
-            if (jawOrLowerTeethTransform != null)
-            {
-                _jawPosBase = jawOrLowerTeethTransform.localPosition;
-                _jawRotBase = jawOrLowerTeethTransform.localRotation;
-                _hasJawBase = true;
-            }
-
-            // Find a blendshape on teeth mesh
-            _openBlendshape = FindOpenBlendshape(teethRenderer);
-
-            // Ensure teeth renderer updates even when offscreen
-            if (teethRenderer != null)
-            {
-                teethRenderer.updateWhenOffscreen = true;
-            }
+            _baseLocalPos = lowerTeethOrJaw.localPosition;
+            _baseLocalRot = lowerTeethOrJaw.localRotation;
+            _hasBase = true;
 
             if (verbose)
             {
-                int blendCount = (teethRenderer != null && teethRenderer.sharedMesh != null)
-                    ? teethRenderer.sharedMesh.blendShapeCount : -1;
-                string meshName = (teethRenderer != null && teethRenderer.sharedMesh != null)
-                    ? teethRenderer.sharedMesh.name : "NULL";
-
-                Debug.Log($"[TTS-Teeth] Awake " +
-                          $"teethRenderer={(teethRenderer != null ? teethRenderer.name : "NULL")} " +
-                          $"mesh={meshName} " +
-                          $"blendCount={blendCount} " +
-                          $"openBlendshapeIdx={_openBlendshape} " +
-                          $"jawNode={(jawOrLowerTeethTransform != null ? jawOrLowerTeethTransform.name : "NULL")} " +
-                          $"hasJawBase={_hasJawBase}");
-
-                // List all blendshapes on teeth mesh for debugging
-                if (teethRenderer != null && teethRenderer.sharedMesh != null && blendCount > 0)
-                {
-                    for (int i = 0; i < blendCount; i++)
-                    {
-                        string bsName = teethRenderer.sharedMesh.GetBlendShapeName(i);
-                        Debug.Log($"[TTS-Teeth] Blendshape[{i}] = {bsName}");
-                    }
-                }
+                string mode = usePitchRotationInstead ? "PitchRotationOnly" : "LocalYTranslationOnly";
+                Debug.Log($"[TTS-Teeth] Awake node={lowerTeethOrJaw.name} " +
+                          $"baseLocalPos={_baseLocalPos} " +
+                          $"baseLocalRotEuler={_baseLocalRot.eulerAngles} " +
+                          $"mode={mode}");
             }
         }
 
-        Transform FindCharacterRoot()
+        Transform FindLowerTeethOrJaw()
         {
-            string[] paths = { "Avatar/CharacterModel", "CharacterModel", "Avatar" };
-            foreach (string path in paths)
+            // Try to find character root
+            Transform characterRoot = null;
+            string[] rootPaths = { "Avatar/CharacterModel", "CharacterModel", "Avatar" };
+            foreach (string path in rootPaths)
             {
                 GameObject found = GameObject.Find(path);
-                if (found != null) return found.transform;
-            }
-
-            var renderers = FindObjectsOfType<SkinnedMeshRenderer>();
-            foreach (var smr in renderers)
-            {
-                if (smr.name == "CC_Base_Body")
+                if (found != null)
                 {
-                    Transform t = smr.transform;
-                    while (t.parent != null)
-                    {
-                        if (t.name == "CharacterModel" || t.name == "Avatar")
-                            return t;
-                        t = t.parent;
-                    }
-                    return smr.transform.root;
+                    characterRoot = found.transform;
+                    break;
                 }
             }
+
+            if (characterRoot == null)
+            {
+                // Try to find via CC_Base_Body
+                var renderers = FindObjectsOfType<SkinnedMeshRenderer>();
+                foreach (var smr in renderers)
+                {
+                    if (smr.name == "CC_Base_Body")
+                    {
+                        characterRoot = smr.transform.root;
+                        break;
+                    }
+                }
+            }
+
+            if (characterRoot == null)
+            {
+                Debug.LogWarning("[TTS-Teeth] Could not find character root");
+                return null;
+            }
+
+            // Search for lower teeth or jaw in priority order
+            string[] searchNames = {
+                "CC_Base_Teeth02",  // Often lower teeth in CC characters
+                "TeethLower",
+                "LowerTeeth",
+                "Teeth_Lower",
+                "CC_Base_JawRoot",
+                "JawRoot",
+                "Jaw"
+            };
+
+            var allTransforms = characterRoot.GetComponentsInChildren<Transform>(true);
+
+            foreach (string searchName in searchNames)
+            {
+                foreach (var t in allTransforms)
+                {
+                    if (t.name.Equals(searchName, System.StringComparison.OrdinalIgnoreCase) ||
+                        t.name.Contains(searchName))
+                    {
+                        if (verbose) Debug.Log($"[TTS-Teeth] Auto-found: {t.name}");
+                        return t;
+                    }
+                }
+            }
+
+            // Fallback: any transform containing "jaw" (case insensitive)
+            foreach (var t in allTransforms)
+            {
+                if (t.name.ToLowerInvariant().Contains("jaw"))
+                {
+                    if (verbose) Debug.Log($"[TTS-Teeth] Fallback found: {t.name}");
+                    return t;
+                }
+            }
+
+            Debug.LogWarning("[TTS-Teeth] Could not auto-find lower teeth or jaw transform");
             return null;
         }
 
-        int FindOpenBlendshape(SkinnedMeshRenderer r)
-        {
-            if (r == null || r.sharedMesh == null) return -1;
-
-            var mesh = r.sharedMesh;
-            int count = mesh.blendShapeCount;
-            if (count <= 0) return -1;
-
-            int bestIdx = -1;
-            int bestScore = -1;
-
-            for (int i = 0; i < count; i++)
-            {
-                string name = (mesh.GetBlendShapeName(i) ?? "").ToLowerInvariant();
-                int score = 0;
-
-                foreach (var kw in openKeywords)
-                {
-                    if (name.Contains(kw.ToLowerInvariant()))
-                        score += 1;
-                }
-
-                // Prefer explicit "open" keyword
-                if (name.Contains("open")) score += 2;
-
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestIdx = i;
-                }
-            }
-
-            return (bestScore >= 2) ? bestIdx : -1;
-        }
-
         /// <summary>
-        /// Called every frame by the lip driver.
-        /// Drives teeth blendshapes AND jaw transform (guaranteed fallback).
+        /// Call every frame from lip driver (LateUpdate).
+        /// Applies VERTICAL-ONLY motion (no sideways drift).
         /// </summary>
         public void SetOpen(float open01, bool speaking)
         {
+            if (lowerTeethOrJaw == null || !_hasBase) return;
+
             float target = speaking ? Mathf.Clamp01(open01) : 0f;
             _openSmoothed = Mathf.Lerp(_openSmoothed, target, 1f - Mathf.Exp(-smooth * Time.deltaTime));
 
-            // A) Teeth blendshape (if exists)
-            if (teethRenderer != null && _openBlendshape >= 0)
+            if (!usePitchRotationInstead)
             {
-                float w = _openSmoothed * 100f;
-                teethRenderer.SetBlendShapeWeight(_openBlendshape, w);
-            }
+                // LOCAL Y translation only (NO X/Z movement)
+                float dir = openMovesPositiveY ? 1f : -1f;
+                float yDelta = dir * maxLocalYOpen * _openSmoothed;
 
-            // B) GUARANTEED visible fallback: move jaw or teeth transform
-            if (_hasJawBase && jawOrLowerTeethTransform != null)
-            {
-                jawOrLowerTeethTransform.localPosition = _jawPosBase + jawLocalPosOpen * _openSmoothed;
-                jawOrLowerTeethTransform.localRotation = _jawRotBase * Quaternion.Euler(jawLocalRotOpen * _openSmoothed);
-            }
+                Vector3 newPos = _baseLocalPos;
+                newPos.y = _baseLocalPos.y + yDelta;
+                lowerTeethOrJaw.localPosition = newPos;
 
-            // Proof logs once per second while speaking
-            if (verbose && speaking)
-            {
-                _logT += Time.deltaTime;
-                if (_logT >= 1f)
+                // Keep rotation UNCHANGED to avoid any sideways drift
+                lowerTeethOrJaw.localRotation = _baseLocalRot;
+
+                if (verbose && speaking)
                 {
-                    _logT = 0f;
-
-                    string blendW = "N/A";
-                    if (teethRenderer != null && _openBlendshape >= 0)
+                    _logT += Time.deltaTime;
+                    if (_logT >= 1f)
                     {
-                        blendW = teethRenderer.GetBlendShapeWeight(_openBlendshape).ToString("F1");
+                        _logT = 0f;
+                        Debug.Log($"[TTS-Teeth] speaking open={_openSmoothed:F2} " +
+                                  $"appliedLocalYDelta={yDelta:F6} " +
+                                  $"nodeLocalPos={lowerTeethOrJaw.localPosition}");
                     }
+                }
+            }
+            else
+            {
+                // Pitch rotation ONLY around LOCAL X (no yaw/roll)
+                float dir = openPitchPositiveX ? 1f : -1f;
+                float pitchDelta = dir * maxPitchOpenDeg * _openSmoothed;
 
-                    Debug.Log($"[TTS-Teeth] speaking open={_openSmoothed:F2} " +
-                              $"blendIdx={_openBlendshape} blendW={blendW} " +
-                              $"jawNode={(jawOrLowerTeethTransform != null ? jawOrLowerTeethTransform.name : "NULL")} " +
-                              $"jawPos={jawOrLowerTeethTransform?.localPosition}");
+                // Keep position unchanged
+                lowerTeethOrJaw.localPosition = _baseLocalPos;
+
+                // ONLY pitch (X) changes; Y/Z rotation stays at base
+                Vector3 baseEuler = _baseLocalRot.eulerAngles;
+                lowerTeethOrJaw.localRotation = Quaternion.Euler(
+                    baseEuler.x + pitchDelta,
+                    baseEuler.y,
+                    baseEuler.z
+                );
+
+                if (verbose && speaking)
+                {
+                    _logT += Time.deltaTime;
+                    if (_logT >= 1f)
+                    {
+                        _logT = 0f;
+                        Debug.Log($"[TTS-Teeth] speaking open={_openSmoothed:F2} " +
+                                  $"appliedPitchDeg={pitchDelta:F2} " +
+                                  $"nodeLocalRotEuler={lowerTeethOrJaw.localRotation.eulerAngles}");
+                    }
                 }
             }
         }
 
         /// <summary>
-        /// Force re-scan for teeth objects.
+        /// Force re-scan for teeth/jaw node.
         /// </summary>
         public void Rescan()
         {
-            if (characterRoot == null)
-                characterRoot = FindCharacterRoot();
+            lowerTeethOrJaw = FindLowerTeethOrJaw();
 
-            if (characterRoot != null)
+            if (lowerTeethOrJaw != null)
             {
-                // Re-find teeth renderer
-                teethRenderer = characterRoot
-                    .GetComponentsInChildren<SkinnedMeshRenderer>(true)
-                    .FirstOrDefault(r => r != null &&
-                        ((r.name ?? "").ToLowerInvariant().Contains("teeth") ||
-                         (r.sharedMesh != null && (r.sharedMesh.name ?? "").ToLowerInvariant().Contains("teeth"))));
-
-                // Re-find jaw
-                jawOrLowerTeethTransform = characterRoot
-                    .GetComponentsInChildren<Transform>(true)
-                    .FirstOrDefault(t => t != null &&
-                        (t.name ?? "").ToLowerInvariant().Contains("jaw"));
-
-                if (jawOrLowerTeethTransform == null && teethRenderer != null)
-                    jawOrLowerTeethTransform = teethRenderer.transform;
-
-                if (jawOrLowerTeethTransform != null)
-                {
-                    _jawPosBase = jawOrLowerTeethTransform.localPosition;
-                    _jawRotBase = jawOrLowerTeethTransform.localRotation;
-                    _hasJawBase = true;
-                }
-
-                _openBlendshape = FindOpenBlendshape(teethRenderer);
-
-                if (teethRenderer != null)
-                    teethRenderer.updateWhenOffscreen = true;
+                _baseLocalPos = lowerTeethOrJaw.localPosition;
+                _baseLocalRot = lowerTeethOrJaw.localRotation;
+                _hasBase = true;
             }
 
             if (verbose)
             {
-                Debug.Log($"[TTS-Teeth] Rescan complete. " +
-                          $"teethRenderer={(teethRenderer != null ? teethRenderer.name : "NULL")} " +
-                          $"jawNode={(jawOrLowerTeethTransform != null ? jawOrLowerTeethTransform.name : "NULL")}");
+                Debug.Log($"[TTS-Teeth] Rescan complete. node={(lowerTeethOrJaw != null ? lowerTeethOrJaw.name : "NULL")}");
             }
         }
 
         void OnDestroy()
         {
-            // Reset blendshape
-            if (teethRenderer != null && _openBlendshape >= 0)
+            // Reset transform to base
+            if (_hasBase && lowerTeethOrJaw != null)
             {
-                teethRenderer.SetBlendShapeWeight(_openBlendshape, 0f);
-            }
-
-            // Reset transform
-            if (_hasJawBase && jawOrLowerTeethTransform != null)
-            {
-                jawOrLowerTeethTransform.localPosition = _jawPosBase;
-                jawOrLowerTeethTransform.localRotation = _jawRotBase;
+                lowerTeethOrJaw.localPosition = _baseLocalPos;
+                lowerTeethOrJaw.localRotation = _baseLocalRot;
             }
 
             if (_instance == this)
@@ -327,46 +275,46 @@ namespace ShadowingTutor
         }
 
 #if UNITY_EDITOR
-        [ContextMenu("Test Open Teeth")]
+        [ContextMenu("Test Open")]
         private void TestOpen()
         {
+            if (lowerTeethOrJaw == null) return;
+            if (!_hasBase)
+            {
+                _baseLocalPos = lowerTeethOrJaw.localPosition;
+                _baseLocalRot = lowerTeethOrJaw.localRotation;
+                _hasBase = true;
+            }
             SetOpen(1f, true);
-            Debug.Log("[TTS-Teeth] Test: Teeth OPEN");
+            Debug.Log("[TTS-Teeth] Test: OPEN");
         }
 
-        [ContextMenu("Test Close Teeth")]
+        [ContextMenu("Test Close")]
         private void TestClose()
         {
+            if (lowerTeethOrJaw == null) return;
             SetOpen(0f, false);
-            Debug.Log("[TTS-Teeth] Test: Teeth CLOSED");
+            Debug.Log("[TTS-Teeth] Test: CLOSED");
         }
 
-        [ContextMenu("Rescan Character")]
+        [ContextMenu("Flip Y Direction")]
+        private void FlipYDirection()
+        {
+            openMovesPositiveY = !openMovesPositiveY;
+            Debug.Log($"[TTS-Teeth] openMovesPositiveY = {openMovesPositiveY}");
+        }
+
+        [ContextMenu("Flip Pitch Direction")]
+        private void FlipPitchDirection()
+        {
+            openPitchPositiveX = !openPitchPositiveX;
+            Debug.Log($"[TTS-Teeth] openPitchPositiveX = {openPitchPositiveX}");
+        }
+
+        [ContextMenu("Rescan")]
         private void EditorRescan()
         {
             Rescan();
-        }
-
-        [ContextMenu("Dump Teeth Info")]
-        private void DumpInfo()
-        {
-            Debug.Log($"[TTS-Teeth] === TEETH DEBUG INFO ===");
-            Debug.Log($"characterRoot: {(characterRoot != null ? characterRoot.name : "NULL")}");
-            Debug.Log($"teethRenderer: {(teethRenderer != null ? teethRenderer.name : "NULL")}");
-            Debug.Log($"jawOrLowerTeethTransform: {(jawOrLowerTeethTransform != null ? jawOrLowerTeethTransform.name : "NULL")}");
-            Debug.Log($"_openBlendshape: {_openBlendshape}");
-            Debug.Log($"_hasJawBase: {_hasJawBase}");
-            Debug.Log($"_openSmoothed: {_openSmoothed}");
-
-            if (teethRenderer != null && teethRenderer.sharedMesh != null)
-            {
-                var mesh = teethRenderer.sharedMesh;
-                Debug.Log($"Teeth mesh: {mesh.name}, blendshapeCount: {mesh.blendShapeCount}");
-                for (int i = 0; i < mesh.blendShapeCount; i++)
-                {
-                    Debug.Log($"  [{i}] {mesh.GetBlendShapeName(i)}");
-                }
-            }
         }
 #endif
     }
