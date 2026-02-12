@@ -25,7 +25,7 @@ namespace ShadowingTutor
         [SerializeField] private float _bottomUIReserve = 0.2f;
 
         [Tooltip("Field of view for portrait shot")]
-        [SerializeField] private float _portraitFOV = 30f;
+        [SerializeField] private float _portraitFOV = 14.69837f;
 
         [Tooltip("Minimum distance from character")]
         [SerializeField] private float _minDistance = 0.5f;
