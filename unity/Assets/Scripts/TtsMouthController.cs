@@ -8,7 +8,9 @@ namespace ShadowingTutor
     /// TTS-driven mouth animation controller with robust face mesh selection.
     /// Properly excludes teeth/tongue/eye meshes and finds the correct face renderer.
     /// Drives mouth animation in LateUpdate to override other controllers.
-    /// Now supports multiple lip viseme blendshapes (AA, EE, OH, MBP, FV) with audio-driven selection.
+    /// Supports multiple lip viseme blendshapes (AA, EE, OH, IH, OU, MBP, FV, TH, CH, SS)
+    /// with audio-driven selection using RMS + ZCR spectral analysis.
+    /// Falls back to lip bones if no viseme blendshapes found.
     ///
     /// FRONTEND-ONLY: Does not touch backend/server/API code.
     /// </summary>
@@ -17,6 +19,10 @@ namespace ShadowingTutor
         [Header("Auto-Wire Settings")]
         [Tooltip("Automatically find and wire components on Start")]
         [SerializeField] private bool _autoWireOnStart = true;
+
+        [Header("Debug")]
+        [Tooltip("Print found visemes once on wire")]
+        public bool debugPrintVisemes = true;
 
         [Header("Face Renderer (Auto-Resolved)")]
         [SerializeField] private SkinnedMeshRenderer _faceRenderer;
@@ -28,6 +34,13 @@ namespace ShadowingTutor
         [SerializeField] private Vector3 _jawRotationAxis = Vector3.right;
         [SerializeField] private float _maxJawAngle = 15f;
 
+        [Header("Lip Bone Fallback")]
+        [SerializeField] private Transform _upperLipBone;
+        [SerializeField] private Transform _lowerLipBone;
+        [SerializeField] private Transform _leftMouthCorner;
+        [SerializeField] private Transform _rightMouthCorner;
+        [SerializeField] private float _lipBoneMovement = 0.002f;
+
         [Header("TTS Audio Source (Auto-Resolved)")]
         [SerializeField] private AudioSource _ttsAudioSource;
 
@@ -38,33 +51,51 @@ namespace ShadowingTutor
         [SerializeField] private float _sensitivity = 5f;
 
         [Header("Viseme Settings")]
-        [Tooltip("Enable multi-viseme lip animation (AA/EE/OH/MBP/FV)")]
+        [Tooltip("Enable multi-viseme lip animation")]
         [SerializeField] private bool _enableVisemes = true;
         [Tooltip("Attack time for viseme transitions (seconds)")]
-        [SerializeField] private float _visemeAttack = 0.06f;
+        [SerializeField] private float _visemeAttack = 0.07f;
         [Tooltip("Release time for viseme transitions (seconds)")]
-        [SerializeField] private float _visemeRelease = 0.12f;
-        [Tooltip("Interval for viseme switching (seconds)")]
-        [SerializeField] private float _visemeSwitchInterval = 0.12f;
-        [Tooltip("Interval for MBP consonant pulses (seconds)")]
-        [SerializeField] private float _mbpPulseInterval = 0.8f;
+        [SerializeField] private float _visemeRelease = 0.15f;
+        [Tooltip("Min interval for viseme switching (seconds)")]
+        [SerializeField] private float _visemeSwitchMin = 0.10f;
+        [Tooltip("Max interval for viseme switching (seconds)")]
+        [SerializeField] private float _visemeSwitchMax = 0.18f;
+        [Tooltip("Min interval for MBP consonant pulses (seconds)")]
+        [SerializeField] private float _mbpPulseMin = 0.6f;
+        [Tooltip("Max interval for MBP consonant pulses (seconds)")]
+        [SerializeField] private float _mbpPulseMax = 1.2f;
+
+        [Header("Viseme Weight Limits")]
+        [SerializeField] private float _aaMaxWeight = 80f;
+        [SerializeField] private float _eeMaxWeight = 60f;
+        [SerializeField] private float _ohMaxWeight = 70f;
+        [SerializeField] private float _mbpMaxWeight = 50f;
+        [SerializeField] private float _fvMaxWeight = 40f;
+        [SerializeField] private float _ssMaxWeight = 35f;
 
         [Header("Controller Conflict Resolution")]
         [Tooltip("Disable competing LipSync controllers while speaking")]
         [SerializeField] private bool _overrideWhileSpeaking = true;
 
-        // Viseme groups
-        public enum VisemeType { None, AA, EE, OH, MBP, FV, SS }
+        // Viseme groups (expanded)
+        public enum VisemeType { None, AA, EE, IH, OH, OU, MBP, FV, TH, CH, SS }
 
         // Viseme blendshape indices (-1 if not found)
         private Dictionary<VisemeType, int> _visemeIndices = new Dictionary<VisemeType, int>();
         private Dictionary<VisemeType, float> _visemeWeights = new Dictionary<VisemeType, float>();
+        private Dictionary<VisemeType, float> _visemeMaxWeights = new Dictionary<VisemeType, float>();
         private bool _hasVisemes = false;
+        private bool _hasLipBones = false;
 
         // Runtime state
         private float _currentOpenAmount = 0f;
         private float _targetOpenAmount = 0f;
         private Quaternion _jawBaseRotation;
+        private Vector3 _upperLipBasePos;
+        private Vector3 _lowerLipBasePos;
+        private Vector3 _leftCornerBasePos;
+        private Vector3 _rightCornerBasePos;
         private bool _isSpeaking = false;
         private bool _wasSpeaking = false;
         private List<MonoBehaviour> _disabledControllers = new List<MonoBehaviour>();
@@ -76,8 +107,11 @@ namespace ShadowingTutor
         private VisemeType _targetViseme = VisemeType.None;
         private float _lastVisemeSwitchTime = 0f;
         private float _lastMbpPulseTime = 0f;
+        private float _nextVisemeSwitchInterval = 0.12f;
+        private float _nextMbpPulseInterval = 0.8f;
         private float _lastZcr = 0f;
         private float _lastRms = 0f;
+        private float _audioBrightness = 0f;
 
         // Singleton for easy access
         private static TtsMouthController _instance;
@@ -86,7 +120,13 @@ namespace ShadowingTutor
         // Excluded renderer name patterns (case-insensitive)
         private static readonly string[] ExcludedNames = {
             "teeth", "tooth", "tongue", "eye", "eyelash", "brow", "hair",
-            "scalp", "cap", "occlusion", "tear"
+            "scalp", "cap", "occlusion", "tear", "lash"
+        };
+
+        // Tokens that indicate viseme/mouth blendshapes (for renderer scoring)
+        private static readonly string[] VisemeTokens = {
+            "viseme", "mouth", "lip", "jaw", "aa", "ee", "ih", "oh", "ou",
+            "fv", "mbp", "th", "ch", "ss"
         };
 
         // Blendshape name patterns for mouth (in priority order)
@@ -102,18 +142,32 @@ namespace ShadowingTutor
         private static readonly Dictionary<VisemeType, string[]> VisemePatterns = new Dictionary<VisemeType, string[]>
         {
             // AA - open mouth (ah, a)
-            { VisemeType.AA, new[] { "viseme_aa", "viseme_a", "v_aa", "mouth_open", "a01_jaw_open" } },
-            // EE - wide smile (ee, i)
-            { VisemeType.EE, new[] { "viseme_ee", "viseme_e", "viseme_i", "v_ee", "v_ih", "e01_mouth_smile" } },
-            // OH - round lips (oh, o, u)
-            { VisemeType.OH, new[] { "viseme_oh", "viseme_o", "viseme_u", "v_oh", "v_ou", "o01_mouth_o" } },
+            { VisemeType.AA, new[] { "viseme_aa", "v_aa", "mouth_a", "mouth_open", "a01_jaw_open", "aa" } },
+            // EE - wide smile (ee)
+            { VisemeType.EE, new[] { "viseme_ee", "v_ee", "mouth_e", "e01_mouth_smile", "ee" } },
+            // IH - narrow (i)
+            { VisemeType.IH, new[] { "viseme_ih", "viseme_i", "v_ih", "mouth_i", "ih" } },
+            // OH - round lips (oh, o)
+            { VisemeType.OH, new[] { "viseme_oh", "viseme_o", "v_oh", "mouth_o", "o01_mouth_o", "oh" } },
+            // OU - pursed (oo, u)
+            { VisemeType.OU, new[] { "viseme_ou", "viseme_u", "v_ou", "mouth_u", "ou" } },
             // MBP - closed lips (m, b, p)
-            { VisemeType.MBP, new[] { "viseme_pp", "viseme_ff", "v_mbp", "v_pp", "v_bb", "m01_lips_close" } },
+            { VisemeType.MBP, new[] { "viseme_pp", "viseme_mbp", "v_mbp", "v_pp", "v_bb", "lips_mbp", "m01_lips_close", "mbp" } },
             // FV - lower lip bite (f, v)
-            { VisemeType.FV, new[] { "viseme_ff", "viseme_th", "v_fv", "v_f", "f01_lower_lip_in" } },
-            // SS - teeth together (s, z, ch, sh)
-            { VisemeType.SS, new[] { "viseme_ss", "viseme_ch", "v_ss", "v_ch", "s01_teeth_close" } }
+            { VisemeType.FV, new[] { "viseme_ff", "viseme_fv", "v_fv", "v_f", "lips_fv", "f01_lower_lip_in", "fv" } },
+            // TH - tongue between teeth
+            { VisemeType.TH, new[] { "viseme_th", "v_th", "lips_th", "th" } },
+            // CH - jaw forward (ch, j, sh)
+            { VisemeType.CH, new[] { "viseme_ch", "viseme_sh", "v_ch", "ch" } },
+            // SS - teeth together (s, z)
+            { VisemeType.SS, new[] { "viseme_ss", "viseme_s", "v_ss", "s01_teeth_close", "ss" } }
         };
+
+        // Lip bone name patterns
+        private static readonly string[] UpperLipBoneNames = { "upperlip", "upper_lip", "lip_upper", "CC_Base_UpperLipIn", "Lip_Upper" };
+        private static readonly string[] LowerLipBoneNames = { "lowerlip", "lower_lip", "lip_lower", "CC_Base_LowerLip", "Lip_Lower" };
+        private static readonly string[] LeftCornerBoneNames = { "mouthcorner_l", "mouth_l", "corner_l", "CC_Base_L_Mouth", "Mouth_L" };
+        private static readonly string[] RightCornerBoneNames = { "mouthcorner_r", "mouth_r", "corner_r", "CC_Base_R_Mouth", "Mouth_R" };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void AutoCreate()
@@ -141,6 +195,18 @@ namespace ShadowingTutor
                 return;
             }
             _instance = this;
+
+            // Initialize viseme max weights
+            _visemeMaxWeights[VisemeType.AA] = _aaMaxWeight;
+            _visemeMaxWeights[VisemeType.EE] = _eeMaxWeight;
+            _visemeMaxWeights[VisemeType.IH] = _eeMaxWeight;
+            _visemeMaxWeights[VisemeType.OH] = _ohMaxWeight;
+            _visemeMaxWeights[VisemeType.OU] = _ohMaxWeight;
+            _visemeMaxWeights[VisemeType.MBP] = _mbpMaxWeight;
+            _visemeMaxWeights[VisemeType.FV] = _fvMaxWeight;
+            _visemeMaxWeights[VisemeType.TH] = _fvMaxWeight;
+            _visemeMaxWeights[VisemeType.CH] = _ssMaxWeight;
+            _visemeMaxWeights[VisemeType.SS] = _ssMaxWeight;
         }
 
         private void Start()
@@ -149,10 +215,24 @@ namespace ShadowingTutor
             {
                 StartCoroutine(DelayedAutoWire());
             }
-            else if (_jawBone != null)
+            else
             {
-                _jawBaseRotation = _jawBone.localRotation;
+                CacheBoneBaseTransforms();
             }
+        }
+
+        private void CacheBoneBaseTransforms()
+        {
+            if (_jawBone != null)
+                _jawBaseRotation = _jawBone.localRotation;
+            if (_upperLipBone != null)
+                _upperLipBasePos = _upperLipBone.localPosition;
+            if (_lowerLipBone != null)
+                _lowerLipBasePos = _lowerLipBone.localPosition;
+            if (_leftMouthCorner != null)
+                _leftCornerBasePos = _leftMouthCorner.localPosition;
+            if (_rightMouthCorner != null)
+                _rightCornerBasePos = _rightMouthCorner.localPosition;
         }
 
         private IEnumerator DelayedAutoWire()
@@ -169,11 +249,7 @@ namespace ShadowingTutor
             yield return null; // Extra frame for renderers
 
             AutoWireAll();
-
-            if (_jawBone != null)
-            {
-                _jawBaseRotation = _jawBone.localRotation;
-            }
+            CacheBoneBaseTransforms();
         }
 
         /// <summary>
@@ -188,6 +264,9 @@ namespace ShadowingTutor
             // Calculate ZCR for viseme selection
             float zcr = GetZeroCrossingRate();
             _lastZcr = zcr;
+
+            // Calculate audio brightness (average absolute derivative)
+            _audioBrightness = GetAudioBrightness();
 
             // Determine speaking state
             bool speaking = _ttsAudioSource != null && _ttsAudioSource.isPlaying && rms > _noiseGate;
@@ -206,7 +285,7 @@ namespace ShadowingTutor
             {
                 // Check if enough time has passed for viseme switch
                 float timeSinceLastSwitch = Time.time - _lastVisemeSwitchTime;
-                if (timeSinceLastSwitch >= _visemeSwitchInterval)
+                if (timeSinceLastSwitch >= _nextVisemeSwitchInterval)
                 {
                     _targetViseme = SelectVisemeFromAudio(rms, zcr);
 
@@ -214,6 +293,8 @@ namespace ShadowingTutor
                     {
                         _currentViseme = _targetViseme;
                         _lastVisemeSwitchTime = Time.time;
+                        // Randomize next switch interval
+                        _nextVisemeSwitchInterval = Random.Range(_visemeSwitchMin, _visemeSwitchMax);
                     }
                 }
 
@@ -225,9 +306,17 @@ namespace ShadowingTutor
                 // Release all visemes when not speaking
                 UpdateVisemeWeights(VisemeType.None, 0f);
             }
+            else if (_enableVisemes && _hasLipBones && speaking)
+            {
+                // Use lip bone fallback
+                UpdateLipBones(rms, zcr);
+            }
+            else if (!speaking && _hasLipBones)
+            {
+                ResetLipBones();
+            }
 
-            // Fallback jaw-only animation (or additional jaw movement)
-            // Calculate target open amount
+            // Calculate target open amount for jaw
             if (rms < _noiseGate)
             {
                 _targetOpenAmount = 0f;
@@ -277,17 +366,59 @@ namespace ShadowingTutor
             }
         }
 
+        /// <summary>
+        /// Calculate Zero-Crossing Rate from audio samples.
+        /// Higher ZCR = more fricatives (s, f, sh) / lower ZCR = more vowels (a, o, e)
+        /// </summary>
+        private float GetZeroCrossingRate()
+        {
+            if (_ttsAudioSource == null || !_ttsAudioSource.isPlaying || _ttsAudioSource.clip == null)
+                return 0f;
+
+            int crossings = 0;
+            for (int i = 1; i < _audioSamples.Length; i++)
+            {
+                if ((_audioSamples[i] >= 0 && _audioSamples[i - 1] < 0) ||
+                    (_audioSamples[i] < 0 && _audioSamples[i - 1] >= 0))
+                {
+                    crossings++;
+                }
+            }
+
+            // Normalize to 0-1 range (empirically ~50-150 crossings for speech)
+            return Mathf.Clamp01(crossings / 100f);
+        }
+
+        /// <summary>
+        /// Calculate audio "brightness" as average absolute derivative.
+        /// Higher = more high frequency content
+        /// </summary>
+        private float GetAudioBrightness()
+        {
+            if (_audioSamples == null || _audioSamples.Length < 2)
+                return 0f;
+
+            float sum = 0f;
+            for (int i = 1; i < _audioSamples.Length; i++)
+            {
+                sum += Mathf.Abs(_audioSamples[i] - _audioSamples[i - 1]);
+            }
+            return Mathf.Clamp01(sum / _audioSamples.Length * 10f);
+        }
+
         private void OnSpeakingStateChanged(bool speaking, float rms)
         {
             if (speaking)
             {
                 float weight = Mathf.Clamp01((rms - _noiseGate) * _sensitivity) * _maxBlendshapeWeight;
-                string visemeStatus = _hasVisemes ? "ENABLED" : "jaw-only";
-                Debug.Log($"[TTS-Mouth] Speaking=TRUE rms={rms:F4} weight={weight:F1} visemes={visemeStatus}");
+                string animMode = _hasVisemes ? "VISEMES" : (_hasLipBones ? "LIP_BONES" : "JAW_ONLY");
+                Debug.Log($"[TTS-Mouth] Speaking=TRUE rms={rms:F4} weight={weight:F1} mode={animMode}");
 
-                // Reset viseme timing
+                // Reset viseme timing with randomization
                 _lastVisemeSwitchTime = Time.time;
-                _lastMbpPulseTime = Time.time - _mbpPulseInterval * 0.5f; // Allow early MBP
+                _lastMbpPulseTime = Time.time - Random.Range(_mbpPulseMin * 0.3f, _mbpPulseMin * 0.7f);
+                _nextVisemeSwitchInterval = Random.Range(_visemeSwitchMin, _visemeSwitchMax);
+                _nextMbpPulseInterval = Random.Range(_mbpPulseMin, _mbpPulseMax);
 
                 if (_overrideWhileSpeaking)
                 {
@@ -305,6 +436,12 @@ namespace ShadowingTutor
                 if (_hasVisemes)
                 {
                     ResetVisemeWeights();
+                }
+
+                // Reset lip bones
+                if (_hasLipBones)
+                {
+                    ResetLipBones();
                 }
 
                 if (_faceRenderer != null && _mouthBlendshapeIndex >= 0)
@@ -387,6 +524,12 @@ namespace ShadowingTutor
             if (_enableVisemes)
             {
                 WireVisemeBlendshapes();
+
+                // If no visemes, try lip bones
+                if (!_hasVisemes)
+                {
+                    WireLipBones(characterRoot);
+                }
             }
 
             Debug.Log("[TTS-Mouth] === Auto-Wire Complete ===");
@@ -473,6 +616,7 @@ namespace ShadowingTutor
 
             SkinnedMeshRenderer bestRenderer = null;
             int bestScore = int.MinValue;
+            int bestVisemeCandidates = 0;
             string bestReason = "";
 
             foreach (var smr in renderers)
@@ -493,6 +637,7 @@ namespace ShadowingTutor
                 if (excluded) continue;
 
                 int score = 0;
+                int visemeCandidates = 0;
                 string reason = "";
 
                 // PRIORITY: CC_Base_Body gets +1000 (CC characters use this for visemes)
@@ -518,27 +663,29 @@ namespace ShadowingTutor
                     reason += "+100(head) ";
                 }
 
-                // +50 if has blendshapes
+                // Count blendshapes matching viseme tokens
                 if (smr.sharedMesh != null && smr.sharedMesh.blendShapeCount > 0)
                 {
                     score += 50;
                     reason += $"+50(bs:{smr.sharedMesh.blendShapeCount}) ";
 
-                    // +5 per mouth-related blendshape
-                    int mouthShapes = 0;
                     for (int i = 0; i < smr.sharedMesh.blendShapeCount; i++)
                     {
                         string bsName = smr.sharedMesh.GetBlendShapeName(i).ToLower();
-                        if (bsName.Contains("viseme") || bsName.Contains("jaw") ||
-                            bsName.Contains("mouth") || bsName.Contains("lip"))
+                        foreach (string token in VisemeTokens)
                         {
-                            mouthShapes++;
+                            if (bsName.Contains(token))
+                            {
+                                visemeCandidates++;
+                                break;
+                            }
                         }
                     }
-                    if (mouthShapes > 0)
+
+                    if (visemeCandidates > 0)
                     {
-                        score += mouthShapes * 5;
-                        reason += $"+{mouthShapes * 5}(mouth:{mouthShapes}) ";
+                        score += visemeCandidates * 10; // Heavy weight for viseme candidates
+                        reason += $"+{visemeCandidates * 10}(viseme:{visemeCandidates}) ";
                     }
                 }
 
@@ -546,6 +693,7 @@ namespace ShadowingTutor
                 {
                     bestScore = score;
                     bestRenderer = smr;
+                    bestVisemeCandidates = visemeCandidates;
                     bestReason = reason;
                 }
             }
@@ -557,25 +705,30 @@ namespace ShadowingTutor
                 string meshName = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.name : "null";
                 int blendCount = _faceRenderer.sharedMesh != null ? _faceRenderer.sharedMesh.blendShapeCount : 0;
 
-                Debug.Log($"[TTS-Mouth] FaceRenderer={GetFullPath(_faceRenderer.transform)} mesh={meshName} blendShapeCount={blendCount}");
-                Debug.Log($"[TTS-Mouth] Score={bestScore} ({bestReason.Trim()})");
+                // Log per spec format
+                Debug.Log($"[TTS-Lips] SelectedRenderer={GetFullPath(_faceRenderer.transform)} mesh={meshName} totalBlendShapes={blendCount} visemeCandidates={bestVisemeCandidates}");
 
-                // Dump first 50 blendshape names
-                if (_faceRenderer.sharedMesh != null && blendCount > 0)
+                if (debugPrintVisemes)
                 {
-                    System.Text.StringBuilder sb = new System.Text.StringBuilder();
-                    sb.Append("[TTS-Mouth] BlendShapes: ");
-                    int dumpCount = Mathf.Min(blendCount, 50);
-                    for (int i = 0; i < dumpCount; i++)
+                    Debug.Log($"[TTS-Mouth] Score={bestScore} ({bestReason.Trim()})");
+
+                    // Dump first 50 blendshape names
+                    if (_faceRenderer.sharedMesh != null && blendCount > 0)
                     {
-                        if (i > 0) sb.Append(", ");
-                        sb.Append($"{i}={_faceRenderer.sharedMesh.GetBlendShapeName(i)}");
+                        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                        sb.Append("[TTS-Mouth] BlendShapes: ");
+                        int dumpCount = Mathf.Min(blendCount, 50);
+                        for (int i = 0; i < dumpCount; i++)
+                        {
+                            if (i > 0) sb.Append(", ");
+                            sb.Append($"{i}={_faceRenderer.sharedMesh.GetBlendShapeName(i)}");
+                        }
+                        if (blendCount > 50)
+                        {
+                            sb.Append($", ... ({blendCount - 50} more)");
+                        }
+                        Debug.Log(sb.ToString());
                     }
-                    if (blendCount > 50)
-                    {
-                        sb.Append($", ... ({blendCount - 50} more)");
-                    }
-                    Debug.Log(sb.ToString());
                 }
             }
             else
@@ -642,7 +795,7 @@ namespace ShadowingTutor
         }
 
         /// <summary>
-        /// Wire multiple viseme blendshapes for lip animation (AA, EE, OH, MBP, FV, SS)
+        /// Wire multiple viseme blendshapes for lip animation
         /// </summary>
         private void WireVisemeBlendshapes()
         {
@@ -689,57 +842,155 @@ namespace ShadowingTutor
                 nextViseme:;
             }
 
-            // Need at least AA + one other for basic lip movement
-            _hasVisemes = _visemeIndices[VisemeType.AA] >= 0 && foundCount >= 2;
+            // Need at least AA + one other for basic lip movement, or at least 2 core visemes
+            bool hasAA = _visemeIndices[VisemeType.AA] >= 0;
+            bool hasEE = _visemeIndices[VisemeType.EE] >= 0;
+            bool hasOH = _visemeIndices[VisemeType.OH] >= 0;
+            bool hasMBP = _visemeIndices[VisemeType.MBP] >= 0;
+            bool hasFV = _visemeIndices[VisemeType.FV] >= 0;
 
-            // Log viseme map
+            int coreVisemes = (hasAA ? 1 : 0) + (hasEE ? 1 : 0) + (hasOH ? 1 : 0) + (hasMBP ? 1 : 0) + (hasFV ? 1 : 0);
+            _hasVisemes = coreVisemes >= 2;
+
+            // Log viseme map per spec format
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
             sb.Append("[TTS-Lips] VisemeMap: ");
-            bool first = true;
-            foreach (var kvp in _visemeIndices)
-            {
-                if (kvp.Key == VisemeType.None) continue;
-                if (!first) sb.Append(", ");
-                first = false;
-                sb.Append($"{kvp.Key}={kvp.Value}");
-            }
+            sb.Append($"AA={_visemeIndices[VisemeType.AA]}, ");
+            sb.Append($"EE={_visemeIndices[VisemeType.EE]}, ");
+            sb.Append($"IH={_visemeIndices[VisemeType.IH]}, ");
+            sb.Append($"OH={_visemeIndices[VisemeType.OH]}, ");
+            sb.Append($"OU={_visemeIndices[VisemeType.OU]}, ");
+            sb.Append($"MBP={_visemeIndices[VisemeType.MBP]}, ");
+            sb.Append($"FV={_visemeIndices[VisemeType.FV]}, ");
+            sb.Append($"TH={_visemeIndices[VisemeType.TH]}, ");
+            sb.Append($"CH={_visemeIndices[VisemeType.CH]}, ");
+            sb.Append($"SS={_visemeIndices[VisemeType.SS]}");
             Debug.Log(sb.ToString());
 
             if (_hasVisemes)
             {
-                Debug.Log($"[TTS-Lips] Viseme lip animation ENABLED ({foundCount} visemes found)");
+                Debug.Log($"[TTS-Lips] Viseme lip animation ENABLED ({foundCount} visemes found, {coreVisemes} core)");
             }
             else
             {
-                Debug.Log("[TTS-Lips] Viseme lip animation DISABLED (using jaw-only fallback)");
+                Debug.Log("[TTS-Lips] No viseme blendshapes found. Falling back to jaw-only.");
             }
         }
 
         /// <summary>
-        /// Calculate Zero-Crossing Rate from audio samples.
-        /// Higher ZCR = more fricatives (s, f, sh) / lower ZCR = more vowels (a, o, e)
+        /// Wire lip bones as fallback when no viseme blendshapes exist
         /// </summary>
-        private float GetZeroCrossingRate()
+        private void WireLipBones(Transform characterRoot)
         {
-            if (_ttsAudioSource == null || !_ttsAudioSource.isPlaying || _ttsAudioSource.clip == null)
-                return 0f;
+            _hasLipBones = false;
 
-            int crossings = 0;
-            for (int i = 1; i < _audioSamples.Length; i++)
+            // Search for lip bones
+            _upperLipBone = FindBoneByPatterns(characterRoot, UpperLipBoneNames);
+            _lowerLipBone = FindBoneByPatterns(characterRoot, LowerLipBoneNames);
+            _leftMouthCorner = FindBoneByPatterns(characterRoot, LeftCornerBoneNames);
+            _rightMouthCorner = FindBoneByPatterns(characterRoot, RightCornerBoneNames);
+
+            // Cache base positions
+            if (_upperLipBone != null) _upperLipBasePos = _upperLipBone.localPosition;
+            if (_lowerLipBone != null) _lowerLipBasePos = _lowerLipBone.localPosition;
+            if (_leftMouthCorner != null) _leftCornerBasePos = _leftMouthCorner.localPosition;
+            if (_rightMouthCorner != null) _rightCornerBasePos = _rightMouthCorner.localPosition;
+
+            // Need at least upper or lower lip for bone-based animation
+            _hasLipBones = _upperLipBone != null || _lowerLipBone != null;
+
+            if (_hasLipBones)
             {
-                if ((_audioSamples[i] >= 0 && _audioSamples[i - 1] < 0) ||
-                    (_audioSamples[i] < 0 && _audioSamples[i - 1] >= 0))
-                {
-                    crossings++;
-                }
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                sb.Append("[TTS-Lips] LipBones: ");
+                sb.Append($"upper={(_upperLipBone != null ? _upperLipBone.name : "null")}, ");
+                sb.Append($"lower={(_lowerLipBone != null ? _lowerLipBone.name : "null")}, ");
+                sb.Append($"corner_l={(_leftMouthCorner != null ? _leftMouthCorner.name : "null")}, ");
+                sb.Append($"corner_r={(_rightMouthCorner != null ? _rightMouthCorner.name : "null")}");
+                Debug.Log(sb.ToString());
+                Debug.Log("[TTS-Lips] Using lip bone fallback for lip animation");
+            }
+            else
+            {
+                Debug.Log("[TTS-Lips] No lip bones found. Using jaw-only animation.");
+            }
+        }
+
+        private Transform FindBoneByPatterns(Transform root, string[] patterns)
+        {
+            foreach (string pattern in patterns)
+            {
+                Transform found = FindBoneRecursivePartial(root, pattern.ToLower());
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private Transform FindBoneRecursivePartial(Transform parent, string pattern)
+        {
+            if (parent.name.ToLower().Contains(pattern))
+                return parent;
+
+            foreach (Transform child in parent)
+            {
+                Transform found = FindBoneRecursivePartial(child, pattern);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Update lip bone positions based on audio analysis
+        /// </summary>
+        private void UpdateLipBones(float rms, float zcr)
+        {
+            if (!_hasLipBones) return;
+
+            float normalizedRms = Mathf.Clamp01((rms - _noiseGate) * _sensitivity);
+
+            // Simulate lip shapes with bone movement
+            // Upper lip moves up slightly for open vowels
+            if (_upperLipBone != null)
+            {
+                float upMove = normalizedRms * _lipBoneMovement * 0.5f;
+                _upperLipBone.localPosition = _upperLipBasePos + Vector3.up * upMove;
             }
 
-            // Normalize to 0-1 range (empirically ~50-150 crossings for speech)
-            return Mathf.Clamp01(crossings / 100f);
+            // Lower lip moves down for open sounds
+            if (_lowerLipBone != null)
+            {
+                float downMove = normalizedRms * _lipBoneMovement;
+                _lowerLipBone.localPosition = _lowerLipBasePos - Vector3.up * downMove;
+            }
+
+            // Mouth corners for EE-like (wide) vs OH-like (narrow) based on ZCR
+            if (_leftMouthCorner != null && _rightMouthCorner != null)
+            {
+                // Higher ZCR = wider mouth (EE), lower = narrower (OH)
+                float wideAmount = (zcr - 0.3f) * normalizedRms * _lipBoneMovement;
+                _leftMouthCorner.localPosition = _leftCornerBasePos + Vector3.left * wideAmount;
+                _rightMouthCorner.localPosition = _rightCornerBasePos + Vector3.right * wideAmount;
+            }
+        }
+
+        /// <summary>
+        /// Reset lip bones to base positions
+        /// </summary>
+        private void ResetLipBones()
+        {
+            if (_upperLipBone != null)
+                _upperLipBone.localPosition = _upperLipBasePos;
+            if (_lowerLipBone != null)
+                _lowerLipBone.localPosition = _lowerLipBasePos;
+            if (_leftMouthCorner != null)
+                _leftMouthCorner.localPosition = _leftCornerBasePos;
+            if (_rightMouthCorner != null)
+                _rightMouthCorner.localPosition = _rightCornerBasePos;
         }
 
         /// <summary>
         /// Select viseme based on RMS (volume) and ZCR (frequency content)
+        /// with randomized variation for natural movement
         /// </summary>
         private VisemeType SelectVisemeFromAudio(float rms, float zcr)
         {
@@ -747,59 +998,91 @@ namespace ShadowingTutor
             if (rms < _noiseGate)
                 return VisemeType.None;
 
-            // High ZCR + moderate RMS = fricatives (SS group: s, z, ch, sh)
-            if (zcr > 0.6f && rms < 0.15f)
+            float normalizedRms = Mathf.Clamp01((rms - _noiseGate) * _sensitivity);
+
+            // MBP pulse injection
+            float timeSinceLastMbp = Time.time - _lastMbpPulseTime;
+            if (timeSinceLastMbp > _nextMbpPulseInterval)
             {
-                if (_visemeIndices[VisemeType.SS] >= 0)
-                    return VisemeType.SS;
-                if (_visemeIndices[VisemeType.FV] >= 0)
-                    return VisemeType.FV;
+                // Check for plosive-like conditions (low-ish RMS burst)
+                if (rms > 0.03f && rms < 0.12f && _visemeIndices[VisemeType.MBP] >= 0)
+                {
+                    _lastMbpPulseTime = Time.time;
+                    _nextMbpPulseInterval = Random.Range(_mbpPulseMin, _mbpPulseMax);
+                    return VisemeType.MBP;
+                }
+            }
+
+            // High ZCR + moderate RMS = fricatives (SS group: s, z, ch, sh)
+            if (zcr > 0.55f && normalizedRms < 0.5f)
+            {
+                // Choose between available fricative visemes
+                List<VisemeType> fricatives = new List<VisemeType>();
+                if (_visemeIndices[VisemeType.SS] >= 0) fricatives.Add(VisemeType.SS);
+                if (_visemeIndices[VisemeType.CH] >= 0) fricatives.Add(VisemeType.CH);
+                if (_visemeIndices[VisemeType.TH] >= 0) fricatives.Add(VisemeType.TH);
+
+                if (fricatives.Count > 0)
+                    return fricatives[Random.Range(0, fricatives.Count)];
+
+                if (_visemeIndices[VisemeType.EE] >= 0)
+                    return VisemeType.EE; // EE as fallback for fricatives
             }
 
             // Moderate ZCR + moderate RMS = FV group (f, v, th)
-            if (zcr > 0.4f && zcr <= 0.6f && rms < 0.12f)
+            if (zcr > 0.4f && zcr <= 0.55f && normalizedRms < 0.4f)
             {
                 if (_visemeIndices[VisemeType.FV] >= 0)
                     return VisemeType.FV;
             }
 
-            // Low RMS burst could be plosive start (MBP)
-            // Also inject MBP pulses periodically for natural consonants
-            float timeSinceLastMbp = Time.time - _lastMbpPulseTime;
-            if (timeSinceLastMbp > _mbpPulseInterval && rms > 0.05f && rms < 0.1f)
-            {
-                _lastMbpPulseTime = Time.time;
-                if (_visemeIndices[VisemeType.MBP] >= 0)
-                    return VisemeType.MBP;
-            }
+            // Vowel selection based on RMS intensity and ZCR
 
-            // Vowel selection based on RMS intensity
-            float normalizedRms = Mathf.Clamp01((rms - _noiseGate) * _sensitivity);
-
-            // High volume = open mouth (AA)
-            if (normalizedRms > 0.6f)
+            // High volume = open mouth vowels
+            if (normalizedRms > 0.55f)
             {
+                // Mix between AA and OH based on brightness
+                if (_audioBrightness > 0.5f && _visemeIndices[VisemeType.AA] >= 0)
+                    return VisemeType.AA;
+                if (_visemeIndices[VisemeType.OH] >= 0 && Random.value > 0.6f)
+                    return VisemeType.OH;
                 if (_visemeIndices[VisemeType.AA] >= 0)
                     return VisemeType.AA;
             }
 
-            // Medium volume with moderate ZCR = EE (brighter vowels)
-            if (normalizedRms > 0.3f && zcr > 0.3f)
+            // Medium volume
+            if (normalizedRms > 0.25f)
             {
-                if (_visemeIndices[VisemeType.EE] >= 0)
-                    return VisemeType.EE;
+                // Higher ZCR = brighter vowels (EE, IH)
+                if (zcr > 0.35f)
+                {
+                    List<VisemeType> brightVowels = new List<VisemeType>();
+                    if (_visemeIndices[VisemeType.EE] >= 0) brightVowels.Add(VisemeType.EE);
+                    if (_visemeIndices[VisemeType.IH] >= 0) brightVowels.Add(VisemeType.IH);
+
+                    if (brightVowels.Count > 0)
+                        return brightVowels[Random.Range(0, brightVowels.Count)];
+                }
+
+                // Lower ZCR = rounder vowels (OH, OU)
+                List<VisemeType> roundVowels = new List<VisemeType>();
+                if (_visemeIndices[VisemeType.OH] >= 0) roundVowels.Add(VisemeType.OH);
+                if (_visemeIndices[VisemeType.OU] >= 0) roundVowels.Add(VisemeType.OU);
+
+                if (roundVowels.Count > 0)
+                    return roundVowels[Random.Range(0, roundVowels.Count)];
+
+                if (_visemeIndices[VisemeType.AA] >= 0)
+                    return VisemeType.AA;
             }
 
-            // Medium volume with low ZCR = OH (rounder vowels)
-            if (normalizedRms > 0.3f && zcr <= 0.3f)
-            {
-                if (_visemeIndices[VisemeType.OH] >= 0)
-                    return VisemeType.OH;
-            }
-
-            // Low volume = partial AA or keep previous
+            // Low volume = partial open
             if (_visemeIndices[VisemeType.AA] >= 0)
                 return VisemeType.AA;
+
+            // If we have EE but not AA, use EE as primary
+            if (_visemeIndices[VisemeType.EE] >= 0)
+                return VisemeType.EE;
 
             return VisemeType.None;
         }
@@ -814,14 +1097,15 @@ namespace ShadowingTutor
             foreach (VisemeType v in System.Enum.GetValues(typeof(VisemeType)))
             {
                 if (v == VisemeType.None) continue;
-                if (_visemeIndices[v] < 0) continue;
+                if (!_visemeIndices.ContainsKey(v) || _visemeIndices[v] < 0) continue;
 
+                float maxWeight = _visemeMaxWeights.ContainsKey(v) ? _visemeMaxWeights[v] : _maxBlendshapeWeight;
                 float targetWeight = 0f;
 
                 if (v == target)
                 {
-                    // Target viseme gets full weight based on RMS
-                    targetWeight = normalizedRms * _maxBlendshapeWeight;
+                    // Target viseme gets weight based on RMS, capped by type
+                    targetWeight = normalizedRms * maxWeight;
                 }
 
                 // Smooth with attack/release
@@ -899,6 +1183,10 @@ namespace ShadowingTutor
             {
                 ResetVisemeWeights();
             }
+            if (_hasLipBones)
+            {
+                ResetLipBones();
+            }
             EnableCompetingControllers();
             if (_instance == this)
                 _instance = null;
@@ -964,6 +1252,7 @@ namespace ShadowingTutor
             Debug.Log("[TTS-Lips] === Viseme Map ===");
             Debug.Log($"  Visemes Enabled: {_enableVisemes}");
             Debug.Log($"  Has Visemes: {_hasVisemes}");
+            Debug.Log($"  Has Lip Bones: {_hasLipBones}");
 
             foreach (VisemeType v in System.Enum.GetValues(typeof(VisemeType)))
             {
@@ -976,7 +1265,8 @@ namespace ShadowingTutor
                     bsName = _faceRenderer.sharedMesh.GetBlendShapeName(idx);
                 }
 
-                Debug.Log($"  {v}: index={idx} name={bsName}");
+                float maxW = _visemeMaxWeights.ContainsKey(v) ? _visemeMaxWeights[v] : 100f;
+                Debug.Log($"  {v}: index={idx} name={bsName} maxWeight={maxW}");
             }
         }
 
@@ -986,8 +1276,9 @@ namespace ShadowingTutor
             if (_visemeIndices.ContainsKey(VisemeType.AA) && _visemeIndices[VisemeType.AA] >= 0)
             {
                 ResetVisemeWeights();
-                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.AA], _maxBlendshapeWeight);
-                Debug.Log($"[TTS-Lips] Test: AA (open mouth) weight={_maxBlendshapeWeight}");
+                float w = _visemeMaxWeights.ContainsKey(VisemeType.AA) ? _visemeMaxWeights[VisemeType.AA] : _maxBlendshapeWeight;
+                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.AA], w);
+                Debug.Log($"[TTS-Lips] Test: AA (open mouth) weight={w}");
             }
             else
             {
@@ -1001,8 +1292,9 @@ namespace ShadowingTutor
             if (_visemeIndices.ContainsKey(VisemeType.EE) && _visemeIndices[VisemeType.EE] >= 0)
             {
                 ResetVisemeWeights();
-                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.EE], _maxBlendshapeWeight);
-                Debug.Log($"[TTS-Lips] Test: EE (wide smile) weight={_maxBlendshapeWeight}");
+                float w = _visemeMaxWeights.ContainsKey(VisemeType.EE) ? _visemeMaxWeights[VisemeType.EE] : _maxBlendshapeWeight;
+                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.EE], w);
+                Debug.Log($"[TTS-Lips] Test: EE (wide smile) weight={w}");
             }
             else
             {
@@ -1016,8 +1308,9 @@ namespace ShadowingTutor
             if (_visemeIndices.ContainsKey(VisemeType.OH) && _visemeIndices[VisemeType.OH] >= 0)
             {
                 ResetVisemeWeights();
-                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.OH], _maxBlendshapeWeight);
-                Debug.Log($"[TTS-Lips] Test: OH (round lips) weight={_maxBlendshapeWeight}");
+                float w = _visemeMaxWeights.ContainsKey(VisemeType.OH) ? _visemeMaxWeights[VisemeType.OH] : _maxBlendshapeWeight;
+                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.OH], w);
+                Debug.Log($"[TTS-Lips] Test: OH (round lips) weight={w}");
             }
             else
             {
@@ -1031,8 +1324,9 @@ namespace ShadowingTutor
             if (_visemeIndices.ContainsKey(VisemeType.MBP) && _visemeIndices[VisemeType.MBP] >= 0)
             {
                 ResetVisemeWeights();
-                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.MBP], _maxBlendshapeWeight);
-                Debug.Log($"[TTS-Lips] Test: MBP (closed lips) weight={_maxBlendshapeWeight}");
+                float w = _visemeMaxWeights.ContainsKey(VisemeType.MBP) ? _visemeMaxWeights[VisemeType.MBP] : _maxBlendshapeWeight;
+                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.MBP], w);
+                Debug.Log($"[TTS-Lips] Test: MBP (closed lips) weight={w}");
             }
             else
             {
@@ -1040,11 +1334,28 @@ namespace ShadowingTutor
             }
         }
 
+        [ContextMenu("Test Viseme FV (Lip Bite)")]
+        private void TestVisemeFV()
+        {
+            if (_visemeIndices.ContainsKey(VisemeType.FV) && _visemeIndices[VisemeType.FV] >= 0)
+            {
+                ResetVisemeWeights();
+                float w = _visemeMaxWeights.ContainsKey(VisemeType.FV) ? _visemeMaxWeights[VisemeType.FV] : _maxBlendshapeWeight;
+                _faceRenderer.SetBlendShapeWeight(_visemeIndices[VisemeType.FV], w);
+                Debug.Log($"[TTS-Lips] Test: FV (lip bite) weight={w}");
+            }
+            else
+            {
+                Debug.LogWarning("[TTS-Lips] Test: FV viseme not found");
+            }
+        }
+
         [ContextMenu("Reset All Visemes")]
         private void TestResetVisemes()
         {
             ResetVisemeWeights();
-            Debug.Log("[TTS-Lips] Test: All visemes reset to 0");
+            ResetLipBones();
+            Debug.Log("[TTS-Lips] Test: All visemes and lip bones reset");
         }
 #endif
     }
