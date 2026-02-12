@@ -167,8 +167,9 @@ namespace ShadowingTutor.Editor
             Debug.Log("\n=== END SLOT ORDER FIX ===");
         }
 
-        [MenuItem("Tools/Character Setup/REPORT: Active Runtime Materials (Play Mode)")]
-        public static void ReportRuntimeMaterials()
+        // Disabled - duplicate of CharacterRenderingFinalFix.ReportRuntimeMaterials
+        // [MenuItem("Tools/Character Setup/REPORT: Active Runtime Materials (Play Mode)")]
+        public static void ReportRuntimeMaterials_DISABLED()
         {
             if (!Application.isPlaying)
             {
